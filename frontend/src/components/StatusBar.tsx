@@ -8,6 +8,7 @@ interface StatusBarProps {
   bb84Progress: BB84Progress | null;
   eveDetected: boolean;
   hasSessionKey: boolean;
+
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({

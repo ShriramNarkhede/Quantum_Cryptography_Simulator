@@ -43,3 +43,7 @@ logs/
 *.tmp
 *.temp
 .cache/
+
+
+#readme
+README_CRYPTO.md

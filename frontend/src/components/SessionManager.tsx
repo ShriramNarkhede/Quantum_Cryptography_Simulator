@@ -81,9 +81,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
     try {
       // First check if session exists
       const sessionStatus = await apiService.getSessionStatus(sessionId);
+      const participants = sessionStatus.participants ?? [];
       
       // Check if role is already taken
-      const existingRole = sessionStatus.participants.find(p => p.role === selectedRole);
+      const existingRole = participants.find(p => p.role === selectedRole);
       if (existingRole) {
         setError(`Role ${selectedRole} is already taken in this session`);
         setLoading(false);
@@ -98,7 +99,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
         session_id: sessionStatus.session_id,
         status: sessionStatus.status,
         created_at: sessionStatus.created_at,
-        participants: sessionStatus.participants.map(p => ({
+        participants: participants.map(p => ({
           user_id: p.user_id,
           role: p.role as 'alice' | 'bob' | 'eve',
           connected: p.connected,

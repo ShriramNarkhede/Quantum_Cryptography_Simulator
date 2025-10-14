@@ -12,8 +12,12 @@ from dataclasses import dataclass
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-import nacl.secret
-import nacl.utils
+from nacl import utils as nacl_utils
+from nacl.bindings import (
+    crypto_aead_xchacha20poly1305_ietf_encrypt,
+    crypto_aead_xchacha20poly1305_ietf_decrypt,
+    crypto_aead_xchacha20poly1305_ietf_NPUBBYTES,
+)
 from nacl.public import PrivateKey, PublicKey, Box
 import logging
 
@@ -128,7 +132,7 @@ class CryptoService:
         logger.info(f"Derived cryptographic keys for session {session_id}")
         return self.derived_keys
     
-    def _generate_key_stream(self, length: int, seq_no: int) -> bytes:
+    def _generate_key_stream(self, length: int, seq_no: int, record_usage: bool = True) -> bytes:
         """
         Generate one-time key stream using HKDF expansion
         
@@ -142,16 +146,16 @@ class CryptoService:
         if not self.derived_keys:
             raise RuntimeError("Keys not derived yet")
         
-        # Check for key stream reuse
+        # Check for key stream reuse only when recording (i.e., during encryption)
         start_offset = seq_no * 1024  # Allocate 1KB segments per message
         end_offset = start_offset + length
         
-        for used_start, used_end in self.used_key_stream_offsets:
-            if not (end_offset <= used_start or start_offset >= used_end):
-                raise RuntimeError(f"Key stream reuse detected: {start_offset}-{end_offset} overlaps with {used_start}-{used_end}")
-        
-        # Record this usage
-        self.used_key_stream_offsets.append((start_offset, end_offset))
+        if record_usage:
+            for used_start, used_end in self.used_key_stream_offsets:
+                if not (end_offset <= used_start or start_offset >= used_end):
+                    raise RuntimeError(f"Key stream reuse detected: {start_offset}-{end_offset} overlaps with {used_start}-{used_end}")
+            # Record this usage
+            self.used_key_stream_offsets.append((start_offset, end_offset))
         
         # Generate key stream using HKDF-expand
         hkdf = HKDF(
@@ -185,7 +189,7 @@ class CryptoService:
         self.message_seq_counter += 1
         
         # Generate one-time key stream
-        key_stream = self._generate_key_stream(len(plaintext_bytes), seq_no)
+        key_stream = self._generate_key_stream(len(plaintext_bytes), seq_no, record_usage=True)
         
         # OTP encryption (XOR)
         ciphertext = bytes(a ^ b for a, b in zip(plaintext_bytes, key_stream))
@@ -236,8 +240,8 @@ class CryptoService:
         if not hmac.compare_digest(encrypted_msg.hmac_tag, expected_hmac):
             raise ValueError("HMAC verification failed - message may be tampered")
         
-        # Regenerate key stream for this sequence number
-        key_stream = self._generate_key_stream(len(encrypted_msg.ciphertext), encrypted_msg.seq_no)
+        # Regenerate key stream for this sequence number without recording usage (decryption)
+        key_stream = self._generate_key_stream(len(encrypted_msg.ciphertext), encrypted_msg.seq_no, record_usage=False)
         
         # Decrypt (XOR)
         plaintext_bytes = bytes(a ^ b for a, b in zip(encrypted_msg.ciphertext, key_stream))
@@ -266,19 +270,15 @@ class CryptoService:
         aad = f"{self.session_id}:{file_seq_no}:{filename}".encode('utf-8')
         
         # Generate random 24-byte nonce for XChaCha20
-        nonce = nacl.utils.random(nacl.secret.SecretBox.NONCE_SIZE)
+        nonce = nacl_utils.random(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES)
         
-        # Create SecretBox (XChaCha20-Poly1305)
-        box = nacl.secret.SecretBox(self.derived_keys.key_file)
-        
-        # Encrypt with AAD
-        # Note: PyNaCl doesn't support AAD directly, so we prepend it to plaintext
-        # and split after decryption (this is a simplification - in production use
-        # a library that supports AAD properly)
-        aad_length = len(aad).to_bytes(4, 'big')
-        combined_data = aad_length + aad + file_data
-        
-        ciphertext = box.encrypt(combined_data, nonce).ciphertext
+        # Encrypt with true AAD using libsodium XChaCha20-Poly1305 AEAD
+        ciphertext = crypto_aead_xchacha20poly1305_ietf_encrypt(
+            file_data,
+            aad,
+            nonce,
+            self.derived_keys.key_file,
+        )
         
         return EncryptedFile(
             ciphertext=ciphertext,
@@ -302,24 +302,33 @@ class CryptoService:
         if not self.derived_keys:
             raise RuntimeError("Keys not derived yet")
         
-        # Create SecretBox
-        box = nacl.secret.SecretBox(self.derived_keys.key_file)
+        # Decrypt using libsodium XChaCha20-Poly1305 AEAD
+        if encrypted_file.aad == b'frontend_encrypted':
+            logger.info("Decrypting frontend-encrypted file (empty AAD)")
+            associated_data = b''
+        else:
+            logger.info("Decrypting backend-encrypted file (with AAD)")
+            associated_data = encrypted_file.aad
         
-        # Decrypt
         try:
-            combined_data = box.decrypt(encrypted_file.ciphertext, encrypted_file.nonce)
+            file_data = crypto_aead_xchacha20poly1305_ietf_decrypt(
+                encrypted_file.ciphertext,
+                associated_data,
+                encrypted_file.nonce,
+                self.derived_keys.key_file,
+            )
         except Exception as e:
-            raise ValueError(f"Decryption failed: {e}")
+            raise ValueError(f"XChaCha20-Poly1305 decryption failed: {e}")
         
-        # Extract AAD and verify
-        aad_length = int.from_bytes(combined_data[:4], 'big')
-        extracted_aad = combined_data[4:4+aad_length]
-        file_data = combined_data[4+aad_length:]
+        # Remove .enc extension from filename if present
+        original_filename = encrypted_file.filename
+        logger.info(f"Decrypting file with original filename: {original_filename}")
+        if original_filename.endswith('.enc'):
+            original_filename = original_filename[:-4]  # Remove .enc extension
+            logger.info(f"Removed .enc extension, new filename: {original_filename}")
         
-        if extracted_aad != encrypted_file.aad:
-            raise ValueError("AAD verification failed")
-        
-        return file_data, encrypted_file.filename
+        logger.info(f"Returning decrypted file: {original_filename} ({len(file_data)} bytes)")
+        return file_data, original_filename
     
     def create_hybrid_key(self, bb84_key: bytes, pqc_key: bytes, session_id: str) -> DerivedKeys:
         """

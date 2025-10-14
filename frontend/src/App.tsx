@@ -1,22 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Wifi, WifiOff } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Shield, Wifi, WifiOff, AlertTriangle, CheckCircle } from 'lucide-react';
 import SessionManager from './components/SessionManager';
 import BB84Simulator from './components/BB84Simulator';
 import ChatInterface from './components/ChatInterface';
 import EveControlPanel from './components/EveControlPanel';
 import StatusBar from './components/StatusBar';
+import CryptoMonitor from './components/CryptoMonitor';
+import SecurityDashboard from "./components/SecurityDashboard";
 import socketService from './services/socketService';
 import apiService from './services/apiService';
-import type { User, Session, BB84Progress } from './types';
-
-interface AppState {
-  currentUser: User | null;
-  currentSession: Session | null;
-  sessionKey: Uint8Array | null;
-  bb84Progress: BB84Progress | null;
-  isConnected: boolean;
-  serverOnline: boolean;
-}
+import cryptoService from './services/cryptoService';
+import type{ 
+  User, 
+  Session, 
+  BB84Progress, 
+  SecureMessage, 
+  AppState,
+  QBERDataPoint,
+  SecurityViolation
+} from './types';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
@@ -24,108 +26,465 @@ const App: React.FC = () => {
     currentSession: null,
     sessionKey: null,
     bb84Progress: null,
+    cryptoInfo: null,
     isConnected: false,
     serverOnline: false,
+    messages: [],
+    eveDetected: false,
+    qberHistory: [],
+    securityViolations: [],
+    fileTransfers: []
   });
 
-  const [messages, setMessages] = useState<any[]>([]);
-  const [eveDetected, setEveDetected] = useState(false);
+  const [showSecurityDashboard, setShowSecurityDashboard] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    type: 'info' | 'warning' | 'error' | 'success';
+    message: string;
+    timestamp: Date;
+  }>>([]);
 
-  // Initialize app
+  // Initialize app on mount
   useEffect(() => {
     initializeApp();
     return () => {
-      socketService.disconnect();
+      cleanup();
     };
   }, []);
 
+  // Auto-refresh server health
+  useEffect(() => {
+    const healthCheckInterval = setInterval(async () => {
+      const serverOnline = await apiService.checkServerHealth();
+      setState(prev => ({ ...prev, serverOnline }));
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(healthCheckInterval);
+  }, []);
+
+  // Periodically refresh crypto info while a session is active
+  useEffect(() => {
+    if (!state.currentSession) return;
+
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const info = await apiService.getSessionSecurity(state.currentSession!.session_id);
+        if (!cancelled) {
+          cryptoService.updateCryptoInfo(info);
+          setState(prev => ({ ...prev, cryptoInfo: info }));
+        }
+      } catch {
+        // ignore periodic errors
+      }
+    };
+
+    // immediate refresh and then every 5s
+    refresh();
+    const id = setInterval(refresh, 5000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [state.currentSession]);
+
   const initializeApp = async () => {
-    // Check server health
-    const serverOnline = await apiService.checkServerHealth();
-    setState(prev => ({ ...prev, serverOnline }));
+    try {
+      // Check server health first
+      const serverOnline = await apiService.checkServerHealth();
+      setState(prev => ({ ...prev, serverOnline }));
 
-    if (serverOnline) {
-      // Connect to Socket.IO
-      const socket = socketService.connect();
+      if (serverOnline) {
+        await setupSocketConnection();
+        addNotification('success', 'Connected to BB84 QKD server');
+      } else {
+        addNotification('error', 'Server is offline. Please check backend connection.');
+      }
+    } catch (error) {
+      console.error('Failed to initialize app:', error);
+      addNotification('error', 'Failed to initialize application');
+    }
+  };
+
+  const setupSocketConnection = async () => {
+    socketService.connect();
+    
+    // Connection events
+    socketService.on('connect', () => {
+      setState(prev => ({ ...prev, isConnected: true }));
+      addNotification('success', 'Real-time connection established');
+    });
+
+    socketService.on('disconnect', (reason: string) => {
+      setState(prev => ({ ...prev, isConnected: false }));
+      addNotification('warning', `Connection lost: ${reason}`);
+    });
+
+    // BB84 events with enhanced crypto support
+    socketService.onBB84Started(({ n_bits, hybrid_mode }) => {
+      addNotification('info', `BB84 started: ${n_bits} qubits${hybrid_mode ? ' (Hybrid mode)' : ''}`);
+    });
+
+    socketService.onBB84Progress((progress: BB84Progress) => {
+      setState(prev => ({ ...prev, bb84Progress: progress }));
       
-      socket.on('connect', () => {
-        setState(prev => ({ ...prev, isConnected: true }));
-      });
-
-      socket.on('disconnect', () => {
-        setState(prev => ({ ...prev, isConnected: false }));
-      });
-
-      // Set up BB84 progress listener
-      socketService.onBB84Progress((progress: BB84Progress) => {
-        setState(prev => ({ ...prev, bb84Progress: progress }));
-        
-        if (progress.qber_exceeded) {
-          setEveDetected(true);
-        }
-      });
-
-      // Set up BB84 completion listener
-      socketService.onBB84Complete((result: any) => {
-        if (result.success) {
-          // Generate mock session key for demo (in real implementation, this would be derived securely)
-          const mockKey = new Uint8Array(32);
-          crypto.getRandomValues(mockKey);
-          setState(prev => ({ ...prev, sessionKey: mockKey }));
-        }
+      // Update QBER history
+      if (progress.qber !== undefined) {
+        const qberPoint: QBERDataPoint = {
+          timestamp: Date.now(),
+          qber: progress.qber,
+          threshold: progress.threshold || 0.11,
+          stage: progress.stage
+        };
+        cryptoService.addQBERDataPoint(qberPoint);
         setState(prev => ({ 
           ...prev, 
-          bb84Progress: { ...result, stage: 'complete', progress: 1.0 }
+          qberHistory: [...prev.qberHistory, qberPoint].slice(-100) 
         }));
-      });
+      }
+      
+      if (progress.qber_exceeded) {
+        setState(prev => ({ ...prev, eveDetected: true }));
+        addNotification('error', 'Eavesdropping detected via QBER analysis!');
+      }
+    });
 
-      // Set up Eve detection listener
-      socketService.onEveDetected((data: any) => {
-        setEveDetected(true);
-        addSystemMessage(`🚨 Eve detected! QBER: ${data.qber.toFixed(3)}, Threshold: ${data.threshold}`);
-      });
+    socketService.onBB84Complete(async (result) => {
+      if (result.success) {
+        // Update crypto info first
+        if (result.crypto_info) {
+          cryptoService.updateCryptoInfo(result.crypto_info);
+          setState(prev => ({ ...prev, cryptoInfo: result.crypto_info }));
+        }
+        
+        // Fetch the real session key from the backend with improved timing
+        if (state.currentSession) {
+          console.log('BB84 completed successfully, starting automatic key retrieval...');
+          
+          // Wait a bit for the backend to be ready, then fetch the key
+          setTimeout(async () => {
+            try {
+              console.log('Attempting to fetch session key after BB84 completion...');
+              if (state.currentSession) {
+                await fetchSessionKey(state.currentSession.session_id, result.hybrid_mode);
+              }
+              
+              // Verify the key was retrieved successfully
+              const verifyKey = cryptoService.getSessionKey();
+              if (verifyKey && verifyKey.length === 32) {
+                console.log('Session key automatically retrieved successfully!');
+                addNotification('success', 'Session key ready for encryption');
+              } else {
+                console.log('Session key not ready, scheduling multiple retries...');
+                // Try multiple retries with increasing delays
+                const retryDelays = [1000, 2000, 3000]; // 1s, 2s, 3s
+                let retryCount = 0;
+                
+                const attemptRetry = async () => {
+                  if (retryCount >= retryDelays.length) {
+                    console.error('All automatic retries failed');
+                    addNotification('warning', 'Session key retrieval failed. Please use "Retry Key Retrieval" button.');
+                    return;
+                  }
+                  
+                  const delay = retryDelays[retryCount];
+                  retryCount++;
+                  
+                  console.log(`Retrying session key retrieval (attempt ${retryCount}/${retryDelays.length}) in ${delay}ms...`);
+                  
+                  setTimeout(async () => {
+                    try {
+                      if (state.currentSession) {
+                        await fetchSessionKey(state.currentSession.session_id, result.hybrid_mode);
+                      }
+                      
+                      // Check if it worked
+                      const verifyKey = cryptoService.getSessionKey();
+                      if (verifyKey && verifyKey.length === 32) {
+                        console.log('Session key retrieved on retry attempt!');
+                        addNotification('success', 'Session key ready for encryption');
+                      } else {
+                        // Try next retry
+                        attemptRetry();
+                      }
+                    } catch (retryError) {
+                      console.error(`Retry attempt ${retryCount} failed:`, retryError);
+                      // Try next retry
+                      attemptRetry();
+                    }
+                  }, delay);
+                };
+                
+                attemptRetry();
+              }
+            } catch (error) {
+              console.error('Failed to fetch session key after BB84 completion:', error);
+              addNotification('warning', 'Session key retrieval failed. Please use "Retry Key Retrieval" button.');
+            }
+          }, 1000); // Wait 1 second for backend to be ready
+        }
+        
+        addNotification('success', `Secure session established${result.hybrid_mode ? ' with hybrid security' : ''}`);
+      } else {
+        addNotification('error', 'BB84 key generation failed');
+      }
+      
+      setState(prev => ({ 
+        ...prev, 
+        bb84Progress: { ...result, stage: 'complete', progress: 1.0 }
+      }));
+    });
 
-      // Set up message listener
-      socketService.onEncryptedMessageReceived((message: any) => {
-        setMessages(prev => [...prev, { ...message, type: 'received' }]);
-      });
+    socketService.onBB84Error(({ error }) => {
+      addNotification('error', `BB84 error: ${error}`);
+    });
 
-      // Set up user event listeners
-      socketService.onUserJoined((user: any) => {
-        addSystemMessage(`${user.role.charAt(0).toUpperCase() + user.role.slice(1)} joined the session`);
-      });
+    // Enhanced message events
+    socketService.onEncryptedMessageReceived((message) => {
+      // Avoid duplicates by message_id and content
+      setState(prev => {
+        const exists = prev.messages.some(m => 
+          m.message_id === message.message_id || 
+          (m.message_type === 'chat_otp' && 
+           m.sender_id === message.sender_id && 
+           Math.abs(new Date(m.timestamp).getTime() - new Date(message.timestamp).getTime()) < 5000) // Within 5 seconds
+        );
+        if (exists) {
+          console.log('Duplicate message detected, skipping:', message.message_id);
+          return prev;
+        }
 
-      socketService.onUserDisconnected((user: any) => {
-        addSystemMessage(`${user.role.charAt(0).toUpperCase() + user.role.slice(1)} disconnected`);
-      });
+        const secureMessage: SecureMessage = {
+          message_id: message.message_id,
+          sender_id: message.sender_id,
+          message_type: 'chat_otp',
+          encrypted_payload: message.encrypted_payload,
+          timestamp: message.timestamp,
+          seq_no: message.seq_no,
+          verified: true,
+          size_bytes: 0
+        };
 
-      socketService.onSessionTerminated(() => {
-        addSystemMessage('Session terminated');
-        handleSessionEnd();
+        return { ...prev, messages: [...prev.messages, secureMessage].slice(-100) };
       });
-    }
+    });
+
+    socketService.onMessageDecrypted(({ message_id, decrypted_content }) => {
+      setState(prev => ({
+        ...prev,
+        messages: prev.messages.map(msg => 
+          msg.message_id === message_id 
+            ? { ...msg, decrypted_content }
+            : msg
+        )
+      }));
+      
+      // Cache decrypted content
+      cryptoService.cacheDecryptedContent(message_id, decrypted_content);
+    });
+
+    // File transfer events
+    socketService.onEncryptedFileReceived((fileInfo) => {
+      // Avoid duplicates by message_id and content
+      setState(prev => {
+        const exists = prev.messages.some(m => 
+          m.message_id === fileInfo.message_id || 
+          (m.message_type === 'file_xchacha20' && 
+           m.sender_id === fileInfo.sender_id && 
+           (m.encrypted_payload as any)?.filename === fileInfo.filename &&
+           Math.abs(new Date(m.timestamp).getTime() - new Date(fileInfo.timestamp).getTime()) < 5000) // Within 5 seconds
+        );
+        if (exists) {
+          console.log('Duplicate file message detected, skipping:', fileInfo.message_id);
+          return prev;
+        }
+
+        // Create a file message for the chat
+        const fileMessage: SecureMessage = {
+          message_id: fileInfo.message_id,
+          sender_id: fileInfo.sender_id,
+          message_type: 'file_xchacha20',
+          encrypted_payload: {
+            ciphertext: '', // Will be filled by server
+            nonce: '',
+            aad: '',
+            filename: fileInfo.filename,
+            file_seq_no: 0,
+            session_id: state.currentSession?.session_id || '',
+            crypto_type: 'xchacha20_poly1305',
+            file_size: fileInfo.file_size
+          },
+          timestamp: fileInfo.timestamp,
+          verified: true,
+          size_bytes: fileInfo.file_size
+        };
+
+        return {
+          ...prev,
+          messages: [...prev.messages, fileMessage].slice(-100),
+          fileTransfers: [...prev.fileTransfers, {
+            message_id: fileInfo.message_id,
+            filename: fileInfo.filename,
+            file_size: fileInfo.file_size,
+            sender_id: fileInfo.sender_id,
+            timestamp: fileInfo.timestamp,
+            encrypted: true,
+            download_ready: true
+          }]
+        };
+      });
+      
+      addNotification('info', `Encrypted file received: ${fileInfo.filename}`);
+    });
+
+    // Eve events
+    socketService.onEveStatusUpdate(({ attack_type }) => {
+      addNotification('warning', `Eve attack updated: ${attack_type}`);
+    });
+
+    socketService.onEveDetected(({ qber, threshold }) => {
+      setState(prev => ({ ...prev, eveDetected: true }));
+      addNotification('error', `Eve detected! QBER: ${(qber * 100).toFixed(2)}% (Threshold: ${(threshold * 100).toFixed(1)}%)`);
+    });
+
+    // User events
+    socketService.onUserJoined((user) => {
+      addNotification('info', `${user.role.charAt(0).toUpperCase() + user.role.slice(1)} joined the session`);
+    });
+
+    socketService.onUserDisconnected((user) => {
+      addNotification('warning', `${user.role.charAt(0).toUpperCase() + user.role.slice(1)} disconnected`);
+    });
+
+    // Session events
+    socketService.onSessionTerminated(() => {
+      addNotification('warning', 'Session terminated');
+      handleSessionEnd();
+    });
+
+    // Security events
+    socketService.onSecurityViolation((violation) => {
+      const normalized: SecurityViolation = {
+        timestamp: violation.timestamp,
+        violation: violation.violation,
+        severity: (violation.severity === 'low' || violation.severity === 'medium' || violation.severity === 'high' || violation.severity === 'critical')
+          ? violation.severity
+          : 'medium',
+        session_id: violation.session_id ?? (state.currentSession?.session_id || '')
+      };
+
+      setState(prev => ({
+        ...prev,
+        securityViolations: [...prev.securityViolations, normalized]
+      }));
+      addNotification('error', `Security violation: ${normalized.violation}`);
+    });
+
+    // Error handling
+    socketService.on('error', (error) => {
+      console.error('Socket error:', error);
+      const message = (error && (error.message || error.error || error.detail)) || 'Connection error occurred';
+      addNotification('error', message);
+    });
   };
 
-  const addSystemMessage = (content: string) => {
-    setMessages(prev => [...prev, {
-      message_id: `system_${Date.now()}`,
-      sender_id: 'system',
-      content,
-      timestamp: new Date().toISOString(),
-      type: 'system'
-    }]);
-  };
-
-  const handleSessionJoin = (user: User, session: Session) => {
-    setState(prev => ({ ...prev, currentUser: user, currentSession: session }));
+  const addNotification = useCallback((type: 'info' | 'warning' | 'error' | 'success', message: string) => {
+    const notification = {
+      id: `${Date.now()}-${Math.random()}`,
+      type,
+      message,
+      timestamp: new Date()
+    };
     
-    if (user.user_id && session.session_id) {
-      socketService.joinSession(session.session_id, user.user_id);
-    }
+    setNotifications(prev => [...prev, notification].slice(-10)); // Keep last 10
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== notification.id));
+    }, 5000);
+  }, []);
 
-    addSystemMessage(`Joined session as ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}`);
-    setMessages([]); // Clear previous messages
-    setEveDetected(false);
+  const fetchSessionKey = useCallback(async (sessionId: string, hybridMode: boolean = false) => {
+    try {
+      console.log('Fetching session key for session:', sessionId);
+      const keyResponse = await apiService.getSessionKey(sessionId);
+      console.log('Key response:', keyResponse);
+      
+      if (keyResponse.key && keyResponse.key_length === 32) {
+        console.log('Raw key string:', keyResponse.key);
+        console.log('Key string length:', keyResponse.key.length);
+        
+        // Ensure the hex string is valid and has even length
+        const cleanHex = keyResponse.key.replace(/[^0-9a-fA-F]/g, '');
+        if (cleanHex.length !== 64) { // 32 bytes = 64 hex characters
+          throw new Error(`Invalid hex string length: ${cleanHex.length} (expected 64)`);
+        }
+        
+        let sessionKey = new Uint8Array(cleanHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
+        console.log('Session key length:', sessionKey.length, 'bytes');
+        console.log('Session key (first 8 bytes):', Array.from(sessionKey.slice(0, 8)));
+        console.log('Session key (all bytes):', Array.from(sessionKey));
+        
+        if (sessionKey.length !== 32) {
+          console.warn(`Key length is ${sessionKey.length} bytes, adjusting to 32 bytes`);
+          // Pad or truncate to exactly 32 bytes
+          const adjustedKey = new Uint8Array(32);
+          if (sessionKey.length < 32) {
+            // Pad with zeros
+            adjustedKey.set(sessionKey, 0);
+          } else {
+            // Truncate to 32 bytes
+            adjustedKey.set(sessionKey.slice(0, 32));
+          }
+          sessionKey = adjustedKey;
+          console.log('Adjusted session key length:', sessionKey.length, 'bytes');
+        }
+        
+        cryptoService.setSessionKey(sessionKey);
+        setState(prev => ({ ...prev, sessionKey }));
+        addNotification('success', `Session key retrieved successfully${hybridMode ? ' (Hybrid mode)' : ''}`);
+        
+        // Force a re-render to update the UI
+        setTimeout(() => {
+          setState(prev => ({ ...prev, sessionKey }));
+        }, 100);
+      } else {
+        console.error('Invalid key response:', keyResponse);
+        addNotification('error', 'Invalid session key received from server');
+      }
+    } catch (error) {
+      console.error('Failed to fetch session key:', error);
+      addNotification('error', 'Failed to retrieve session key');
+    }
+  }, [addNotification]);
+
+  const handleSessionJoin = async (user: User, session: Session) => {
+    try {
+      setState(prev => ({ 
+        ...prev, 
+        currentUser: user, 
+        currentSession: session,
+        messages: [],
+        eveDetected: false,
+        qberHistory: []
+      }));
+      
+      if (user.user_id && session.session_id) {
+        socketService.joinSession(session.session_id, user.user_id);
+      }
+
+      // Get initial session security info
+      try {
+        const cryptoInfo = await apiService.getSessionSecurity(session.session_id);
+        cryptoService.updateCryptoInfo(cryptoInfo);
+        setState(prev => ({ ...prev, cryptoInfo }));
+      } catch (error) {
+        console.warn('Could not fetch initial crypto info:', error);
+      }
+
+      addNotification('success', `Joined session as ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}`);
+    } catch (error) {
+      console.error('Error joining session:', error);
+      addNotification('error', 'Failed to join session');
+    }
   };
 
   const handleSessionEnd = () => {
@@ -134,118 +493,430 @@ const App: React.FC = () => {
       currentUser: null,
       currentSession: null,
       sessionKey: null,
-      bb84Progress: null
+      bb84Progress: null,
+      cryptoInfo: null,
+      messages: [],
+      eveDetected: false,
+      qberHistory: [],
+      fileTransfers: []
     }));
-    setMessages([]);
-    setEveDetected(false);
+    
+    cryptoService.clear();
+    addNotification('info', 'Session ended - all data cleared');
   };
 
-  const handleStartBB84 = async () => {
+  const handleStartBB84 = async (useHybrid: boolean = false) => {
     if (!state.currentSession) return;
 
     try {
-      await apiService.startBB84Simulation(state.currentSession.session_id, 1000, 0.1);
-      addSystemMessage('BB84 key generation started...');
-      setEveDetected(false);
-      setState(prev => ({ ...prev, sessionKey: null, bb84Progress: null }));
+      await apiService.startBB84Simulation(
+        state.currentSession.session_id, 
+        1000, 
+        0.1, 
+        useHybrid
+      );
+      
+      setState(prev => ({ 
+        ...prev, 
+        sessionKey: null, 
+        bb84Progress: null, 
+        eveDetected: false,
+        qberHistory: []
+      }));
+      
+      addNotification('info', `BB84 key generation started${useHybrid ? ' with hybrid mode' : ''}`);
     } catch (error) {
       const errorMsg = apiService.handleApiError(error);
-      addSystemMessage(`Error starting BB84: ${errorMsg}`);
+      addNotification('error', `Error starting BB84: ${errorMsg}`);
     }
   };
 
-  const handleSendMessage = (content: string) => {
+  const handleRetrySessionKey = async () => {
+    if (!state.currentSession) return;
+    
+    addNotification('info', 'Retrying session key retrieval...');
+    try {
+      await fetchSessionKey(state.currentSession.session_id, false);
+      
+      // Verify the key was retrieved
+      const verifyKey = cryptoService.getSessionKey();
+      if (verifyKey && verifyKey.length === 32) {
+        addNotification('success', 'Session key retrieved successfully!');
+      } else {
+        addNotification('error', 'Session key retrieval failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Manual retry failed:', error);
+      addNotification('error', 'Session key retrieval failed. Please check console for details.');
+    }
+  };
+
+  const ensureSessionKeyReady = async (): Promise<boolean> => {
+    if (!state.currentSession) return false;
+    
+    // Check if we have a valid session key
+    if (state.sessionKey && state.sessionKey.length === 32) {
+      console.log('Session key already ready:', state.sessionKey.length, 'bytes');
+      return true;
+    }
+    
+    // Try to fetch the session key
+    try {
+      console.log('Session key not ready, fetching...');
+      addNotification('info', 'Ensuring session key is ready...');
+      
+      // Fetch the key and wait for it to be processed
+      const keyResponse = await apiService.getSessionKey(state.currentSession.session_id);
+      console.log('Key response in ensureSessionKeyReady:', keyResponse);
+      
+      if (keyResponse.key && keyResponse.key_length === 32) {
+        // Process the key immediately
+        const cleanHex = keyResponse.key.replace(/[^0-9a-fA-F]/g, '');
+        if (cleanHex.length !== 64) {
+          throw new Error(`Invalid hex string length: ${cleanHex.length} (expected 64)`);
+        }
+        
+        let sessionKey = new Uint8Array(cleanHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
+        
+        if (sessionKey.length !== 32) {
+          console.warn(`Key length is ${sessionKey.length} bytes, adjusting to 32 bytes`);
+          const adjustedKey = new Uint8Array(32);
+          if (sessionKey.length < 32) {
+            adjustedKey.set(sessionKey, 0);
+          } else {
+            adjustedKey.set(sessionKey.slice(0, 32));
+          }
+          sessionKey = adjustedKey;
+        }
+        
+        // Update both crypto service and state immediately
+        cryptoService.setSessionKey(sessionKey);
+        setState(prev => ({ ...prev, sessionKey }));
+        
+        // Verify the key was set correctly
+        const verifyKey = cryptoService.getSessionKey();
+        console.log('Session key ready after fetch:', sessionKey.length, 'bytes');
+        console.log('Verification - crypto service key:', verifyKey?.length, 'bytes');
+        
+        if (!verifyKey || verifyKey.length !== 32) {
+          console.error('Failed to set session key in crypto service');
+          return false;
+        }
+        
+        addNotification('success', 'Session key is now ready');
+        return true;
+      } else {
+        console.error('Invalid key response in ensureSessionKeyReady:', keyResponse);
+        addNotification('error', 'Invalid session key received from server');
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to ensure session key is ready:', error);
+      addNotification('error', 'Failed to retrieve session key');
+      return false;
+    }
+  };
+
+  const handleSendMessage = async (content: string) => {
     if (!state.currentUser || !state.currentSession || !state.sessionKey) return;
 
-    // Simple XOR encryption for demo (in real implementation, use proper OTP)
-    const encrypted = btoa(content); // Base64 encoding for demo
-    
-    const messageData = {
-      message_id: `msg_${Date.now()}`,
-      sender_id: state.currentUser.user_id,
-      content,
-      encrypted_content: encrypted,
-      timestamp: new Date().toISOString(),
-      type: 'sent'
-    };
+    try {
+      // Create local message for immediate display
+      const localMessage: SecureMessage = {
+        message_id: `local_${Date.now()}`,
+        sender_id: state.currentUser.user_id,
+        message_type: 'chat_otp',
+        encrypted_payload: {
+          ciphertext: '[Encrypting...]',
+          hmac_tag: '',
+          seq_no: 0,
+          timestamp: Date.now(),
+          session_id: state.currentSession.session_id,
+          crypto_type: 'otp_hmac_sha3'
+        },
+        timestamp: new Date().toISOString(),
+        verified: false,
+        size_bytes: content.length,
+        decrypted_content: content
+      };
 
-    setMessages(prev => [...prev, messageData]);
-    socketService.sendEncryptedMessage(
+      setState(prev => ({
+        ...prev,
+        messages: [...prev.messages, localMessage]
+      }));
+
+      // Send via socket for server-side encryption
+      socketService.sendEncryptedMessage(
+        state.currentSession.session_id,
+        state.currentUser.user_id,
+        content
+      );
+    } catch (error) {
+      console.error('Error sending message:', error);
+      addNotification('error', 'Failed to send message');
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!state.currentUser || !state.currentSession || !state.sessionKey) return;
+
+    try {
+      const result = await apiService.sendEncryptedFile(
+        state.currentSession.session_id,
+        state.currentUser.user_id,
+        file
+      );
+      
+      // Don't create local message - let the socket event handle it
+      // This prevents duplicate messages with the same ID
+      
+      // Refresh crypto stats after uploading a file
+      try {
+        const info = await apiService.getSessionSecurity(state.currentSession.session_id);
+        cryptoService.updateCryptoInfo(info);
+        setState(prev => ({ ...prev, cryptoInfo: info }));
+      } catch {}
+
+      addNotification('success', `File encrypted and sent: ${result.filename}`);
+    } catch (error) {
+      const errorMsg = apiService.handleApiError(error);
+      addNotification('error', `File upload failed: ${errorMsg}`);
+    }
+  };
+
+  const handleFileDownload = async (messageId: string, encrypted: boolean) => {
+    if (!state.currentSession || !state.currentUser) return;
+
+    try {
+      let result;
+      if (encrypted) {
+        // Download raw encrypted file
+        result = await apiService.downloadRawEncryptedFile(
+          state.currentSession.session_id,
+          messageId,
+          state.currentUser.user_id
+        );
+      } else {
+        // Download decrypted file
+        result = await apiService.downloadEncryptedFile(
+          state.currentSession.session_id,
+          messageId,
+          state.currentUser.user_id
+        );
+      }
+      
+      // Create download link
+      const blob = new Blob([Uint8Array.from(atob(result.file_data), c => c.charCodeAt(0))]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      const fileType = encrypted ? 'encrypted file' : 'decrypted file';
+      addNotification('success', `${fileType} downloaded: ${result.filename}`);
+    } catch (error) {
+      const errorMsg = apiService.handleApiError(error);
+      addNotification('error', `File download failed: ${errorMsg}`);
+    }
+  };
+
+  const handleDecryptMessage = (messageId: string) => {
+    if (!state.currentSession || !state.currentUser) return;
+
+    // Ensure message exists and is received & encrypted
+    const target = state.messages.find(m => m.message_id === messageId);
+    if (!target) return;
+    const isReceived = target.sender_id !== state.currentUser?.user_id && target.message_type === 'chat_otp';
+    if (!isReceived) return;
+
+    // Check cache first
+    const cached = cryptoService.getCachedDecryptedContent(messageId);
+    if (cached) {
+      setState(prev => ({
+        ...prev,
+        messages: prev.messages.map(msg => 
+          msg.message_id === messageId 
+            ? { ...msg, decrypted_content: cached }
+            : msg
+        )
+      }));
+      return;
+    }
+
+    // Request decryption from server
+    socketService.requestMessageDecryption(
       state.currentSession.session_id,
-      state.currentUser.user_id,
-      encrypted
+      messageId,
+      state.currentUser.user_id
     );
+  };
+
+  const cleanup = () => {
+    socketService.cleanup();
+    cryptoService.clear();
   };
 
   const renderMainInterface = () => {
     if (!state.currentUser || !state.currentSession) {
-      return <SessionManager onSessionJoin={handleSessionJoin} serverOnline={state.serverOnline} />;
+      return (
+        <SessionManager 
+          onSessionJoin={handleSessionJoin} 
+          serverOnline={state.serverOnline} 
+        />
+      );
     }
 
     return (
-      <div className="flex flex-col lg:flex-row gap-6 h-full">
-        {/* Left Panel - BB84 Simulation */}
-        <div className="flex-1 space-y-4">
-          <BB84Simulator
-            progress={state.bb84Progress}
-            sessionKey={state.sessionKey}
-            onStartBB84={handleStartBB84}
-            userRole={state.currentUser.role}
-            eveDetected={eveDetected}
-          />
-          
-          {state.currentUser.role === 'eve' && (
-            <EveControlPanel
-              sessionId={state.currentSession.session_id}
-              onEveParamsChange={(params) => {
-                socketService.updateEveParams(state.currentSession!.session_id, params);
-              }}
-            />
-          )}
+      <div className="space-y-6">
+        {/* Security Dashboard Toggle */}
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowSecurityDashboard(!showSecurityDashboard)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              showSecurityDashboard
+                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {showSecurityDashboard ? 'Hide' : 'Show'} Security Dashboard
+          </button>
         </div>
 
-        {/* Right Panel - Chat */}
-        <div className="lg:w-96">
-          <ChatInterface
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            currentUser={state.currentUser}
-            sessionKey={state.sessionKey}
-            disabled={!state.sessionKey || eveDetected}
+        {/* Security Dashboard */}
+        {showSecurityDashboard && (
+          <SecurityDashboard
+            cryptoInfo={state.cryptoInfo}
+            qberHistory={state.qberHistory}
+            securityViolations={state.securityViolations}
+            sessionHealth={cryptoService.getSessionHealthAssessment()}
           />
+        )}
+
+        {/* Main Content */}
+        <div className="flex flex-col xl:flex-row gap-6">
+          {/* Left Panel - BB84 and Controls */}
+          <div className="flex-1 space-y-6">
+            <BB84Simulator
+              progress={state.bb84Progress}
+              sessionKey={state.sessionKey}
+              onStartBB84={handleStartBB84}
+              onRetrySessionKey={handleRetrySessionKey}
+              userRole={state.currentUser.role}
+              eveDetected={state.eveDetected}
+              cryptoInfo={state.cryptoInfo}
+              qberHistory={state.qberHistory}
+            />
+            
+            {state.currentUser.role === 'eve' && (
+              <EveControlPanel
+                sessionId={state.currentSession.session_id}
+                onEveParamsChange={(params) => {
+                  socketService.updateEveParams(state.currentSession!.session_id, params);
+                }}
+              />
+            )}
+          </div>
+
+          {/* Right Panel - Communication and Monitoring */}
+          <div className="xl:w-96 space-y-6">
+            <ChatInterface
+              messages={state.messages.map(m => ({
+                message_id: m.message_id,
+                sender_id: m.sender_id,
+                content: m.decrypted_content ?? (m.message_type === 'system' ? (m.encrypted_payload as any)?.content : undefined),
+                encrypted_content: m.message_type === 'chat_otp' ? (m.encrypted_payload as any)?.ciphertext : undefined,
+                timestamp: m.timestamp,
+                type: m.sender_id === 'system' ? 'system' : (m.sender_id === state.currentUser?.user_id ? 'sent' : 'received'),
+                file_info: m.message_type === 'file_xchacha20' ? {
+                  filename: (m.encrypted_payload as any)?.filename || 'Unknown file',
+                  file_size: (m.encrypted_payload as any)?.file_size || 0,
+                  encrypted: true,
+                  download_ready: true
+                } : undefined
+              }))}
+              onSendMessage={handleSendMessage}
+              onDecryptMessage={handleDecryptMessage}
+              onFileUpload={handleFileUpload}
+              onFileDownload={handleFileDownload}
+              onEnsureSessionKeyReady={ensureSessionKeyReady}
+              currentUser={state.currentUser}
+              sessionKey={state.sessionKey}
+              sessionId={state.currentSession?.session_id}
+              disabled={!state.sessionKey || state.eveDetected}
+              autoScroll={false}
+            />
+            
+            <CryptoMonitor
+              cryptoInfo={state.cryptoInfo}
+              encryptionStatus={cryptoService.getEncryptionStatus()}
+              securityRecommendations={cryptoService.getSecurityRecommendations()}
+            />
+          </div>
         </div>
       </div>
     );
   };
 
+  const getConnectionStatusIcon = () => {
+    if (!state.serverOnline) return <WifiOff className="w-5 h-5 text-red-500" />;
+    if (!state.isConnected) return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+    return <Wifi className="w-5 h-5 text-green-500" />;
+  };
+
+  const getConnectionStatusText = () => {
+    if (!state.serverOnline) return 'Server Offline';
+    if (!state.isConnected) return 'Disconnected';
+    return 'Connected';
+  };
+
+  const getConnectionStatusColor = () => {
+    if (!state.serverOnline) return 'text-red-600';
+    if (!state.isConnected) return 'text-yellow-600';
+    return 'text-green-600';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Shield className="w-8 h-8 text-quantum-600" />
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Cryptex</h1>
-                <p className="text-sm text-gray-500">Quantum Key Simulator </p>
+                <h1 className="text-2xl font-bold text-gray-900">BB84 QKD Simulator</h1>
+                <p className="text-sm text-gray-500">Enhanced Cryptography Edition</p>
               </div>
             </div>
 
             <div className="flex items-center space-x-4">
               {/* Connection Status */}
               <div className="flex items-center space-x-2">
-                {state.isConnected ? (
-                  <Wifi className="w-5 h-5 text-green-500" />
-                ) : (
-                  <WifiOff className="w-5 h-5 text-red-500" />
-                )}
-                <span className={`text-sm font-medium ${
-                  state.isConnected ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {state.isConnected ? 'Connected' : 'Disconnected'}
+                {getConnectionStatusIcon()}
+                <span className={`text-sm font-medium ${getConnectionStatusColor()}`}>
+                  {getConnectionStatusText()}
                 </span>
               </div>
+
+              {/* Security Status */}
+              {state.sessionKey && (
+                <div className="flex items-center space-x-2">
+                  {state.eveDetected ? (
+                    <AlertTriangle className="w-5 h-5 text-red-500" />
+                  ) : (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  )}
+                  <span className={`text-sm font-medium ${
+                    state.eveDetected ? 'text-red-600' : 'text-green-600'
+                  }`}>
+                    {state.eveDetected ? 'Compromised' : 'Secure'}
+                  </span>
+                </div>
+              )}
 
               {/* Server Status */}
               <div className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -260,6 +931,36 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      {/* Notifications */}
+      <div className="fixed top-20 right-4 z-50 space-y-2">
+        {notifications.map((notification) => (
+          <div
+            key={notification.id}
+            className={`p-4 rounded-lg shadow-lg max-w-sm transition-all duration-300 ${
+              notification.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' :
+              notification.type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' :
+              notification.type === 'warning' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+              'bg-blue-100 text-blue-800 border border-blue-200'
+            }`}
+          >
+            <div className="flex items-start">
+              <div className="flex-1">
+                <p className="text-sm font-medium">{notification.message}</p>
+                <p className="text-xs opacity-75 mt-1">
+                  {notification.timestamp.toLocaleTimeString()}
+                </p>
+              </div>
+              <button
+                onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
+                className="ml-2 text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Status Bar */}
@@ -267,8 +968,9 @@ const App: React.FC = () => {
           currentUser={state.currentUser}
           currentSession={state.currentSession}
           bb84Progress={state.bb84Progress}
-          eveDetected={eveDetected}
+          eveDetected={state.eveDetected}
           hasSessionKey={!!state.sessionKey}
+          // cryptoInfo={state.cryptoInfo}
         />
 
         {/* Main Interface */}
@@ -280,9 +982,16 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="bg-white border-t mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-center text-sm text-gray-500">
-            BB84 QKD Simulation System - Educational Demo Only
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              BB84 QKD Simulation System - Enhanced Cryptography Edition
+            </p>
+            <div className="flex items-center space-x-4 text-xs text-gray-400">
+              <span>Secure Messages: {state.messages.filter(m => m.message_type === 'chat_otp').length}</span>
+              <span>QBER: {state.cryptoInfo?.qber ? `${(state.cryptoInfo.qber * 100).toFixed(2)}%` : 'N/A'}</span>
+              <span>Violations: {state.securityViolations.length}</span>
+            </div>
+          </div>
         </div>
       </footer>
     </div>

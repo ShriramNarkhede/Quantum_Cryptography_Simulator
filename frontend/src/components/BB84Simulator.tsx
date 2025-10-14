@@ -1,25 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, RotateCcw, Zap, Eye, EyeOff, AlertTriangle } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import type { BB84Progress } from '../types';
+import { Play, Zap, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { BB84Progress, CryptoInfo, QBERDataPoint } from '../types';
 
 interface BB84SimulatorProps {
     progress: BB84Progress | null;
     sessionKey: Uint8Array | null;
-    onStartBB84: () => void;
+    onStartBB84: (useHybrid?: boolean) => void | Promise<void>;
+    onRetrySessionKey?: () => void | Promise<void>;
     userRole: 'alice' | 'bob' | 'eve';
     eveDetected: boolean;
+    cryptoInfo?: CryptoInfo | null;
+    qberHistory?: QBERDataPoint[];
 }
 
 const BB84Simulator: React.FC<BB84SimulatorProps> = ({
     progress,
     sessionKey,
     onStartBB84,
+    onRetrySessionKey,
     userRole,
-    eveDetected
+    eveDetected,
+    cryptoInfo: _cryptoInfo,
+    qberHistory: qberHistoryProp
 }) => {
     const [showDetails, setShowDetails] = useState(false);
     const [qberHistory, setQberHistory] = useState<{ time: number, qber: number }[]>([]);
+
+    // If history provided from parent, prefer it
+    useEffect(() => {
+        if (qberHistoryProp && qberHistoryProp.length > 0) {
+            setQberHistory(qberHistoryProp.map(p => ({ time: p.timestamp, qber: p.qber * 100 })));
+        }
+    }, [qberHistoryProp]);
 
     // Update QBER history when progress changes
     useEffect(() => {
@@ -191,7 +204,7 @@ const BB84Simulator: React.FC<BB84SimulatorProps> = ({
                 <div className="flex items-center space-x-2">
                     {canStartSimulation() && (
                         <button
-                            onClick={onStartBB84}
+                            onClick={() => onStartBB84()}
                             disabled={!!progress?.stage}
                             className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
@@ -291,12 +304,18 @@ const BB84Simulator: React.FC<BB84SimulatorProps> = ({
                                     </div>
                                 )}
 
-                                {progress.final_key_length && (
+                                {userRole !== 'eve' && progress.final_key_length && (
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm text-gray-600">Final Key:</span>
                                         <span className="text-sm font-medium text-green-600">
                                             {progress.final_key_length} bytes
                                         </span>
+                                    </div>
+                                )}
+                                {userRole === 'eve' && progress?.stage === 'complete' && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-gray-600">Eve's Knowledge:</span>
+                                        <span className="text-sm font-medium text-gray-600">No access to final key</span>
                                     </div>
                                 )}
                             </div>
@@ -305,29 +324,56 @@ const BB84Simulator: React.FC<BB84SimulatorProps> = ({
 
                     {/* Session Key Status */}
                     <div className="bg-white border rounded-lg p-4">
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">Session Key</h3>
+                        <h3 className="text-lg font-medium text-gray-900 mb-4">{userRole === 'eve' ? "Eve's Guesses" : 'Session Key'}</h3>
 
-                        {sessionKey ? (
-                            <div className="space-y-3">
+                        {userRole === 'eve' ? (
+                            <div className="space-y-2">
                                 <div className="flex items-center space-x-2">
-                                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                                    <span className="text-sm font-medium text-green-700">Key Established</span>
+                                    <div className={`w-3 h-3 rounded-full ${eveDetected ? 'bg-red-500' : 'bg-gray-300'}`}></div>
+                                    <span className={`text-sm font-medium ${eveDetected ? 'text-red-700' : 'text-gray-700'}`}>
+                                        {eveDetected ? 'Eavesdropping detected via QBER' : 'Stealthy — limited information'}
+                                    </span>
                                 </div>
-                                <div className="text-xs text-gray-600">
-                                    <div>Length: {sessionKey.length} bytes</div>
-                                    <div>Format: AES-256 Compatible</div>
-                                    <div className="font-mono bg-gray-100 p-2 rounded mt-2">
-                                        {Array.from(sessionKey.slice(0, 8)).map(b =>
-                                            b.toString(16).padStart(2, '0')
-                                        ).join(' ')}...
+                                <p className="text-xs text-gray-600">
+                                    Eve cannot obtain the final secret key. At best, she forms noisy guesses before privacy amplification.
+                                </p>
+                                {progress?.sifted_length !== undefined && (
+                                    <div className="text-xs text-gray-600">
+                                        <div>Visible public info: bases and sample test bits</div>
+                                        <div>Guess reliability: low (QBER {(progress.qber ?? 0) * 100}% )</div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         ) : (
-                            <div className="text-center py-4">
-                                <div className="w-3 h-3 rounded-full bg-gray-300 mx-auto mb-2"></div>
-                                <span className="text-sm text-gray-600">No session key available</span>
-                            </div>
+                            sessionKey ? (
+                                <div className="space-y-3">
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                                        <span className="text-sm font-medium text-green-700">Key Established</span>
+                                    </div>
+                                    <div className="text-xs text-gray-600">
+                                        <div>Length: {sessionKey.length} bytes</div>
+                                        <div className="font-mono bg-gray-100 p-2 rounded mt-2">
+                                            {Array.from(sessionKey.slice(0, 8)).map(b =>
+                                                b.toString(16).padStart(2, '0')
+                                            ).join(' ')}...
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center py-4">
+                                    <div className="w-3 h-3 rounded-full bg-gray-300 mx-auto mb-2"></div>
+                                    <span className="text-sm text-gray-600 mb-3 block">No session key available</span>
+                                    {progress?.success && onRetrySessionKey && (
+                                        <button
+                                            onClick={onRetrySessionKey}
+                                            className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                        >
+                                            Retry Key Retrieval
+                                        </button>
+                                    )}
+                                </div>
+                            )
                         )}
                     </div>
                 </div>

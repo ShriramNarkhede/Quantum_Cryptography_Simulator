@@ -3,7 +3,16 @@
  */
 
 import { io, Socket } from 'socket.io-client';
-import type { BB84Progress, EncryptedMessage, EveParams } from '../types/index';
+import type { BB84Progress, EncryptedMessagePayload, EveParams } from '../types/index';
+
+type IncomingEncryptedMessage = {
+    message_id: string;
+    sender_id: string;
+    encrypted_payload: EncryptedMessagePayload;
+    timestamp: string;
+    seq_no: number;
+    crypto_type: string;
+};
 
 class SocketService {
     private socket: Socket | null = null;
@@ -20,6 +29,13 @@ class SocketService {
         }
 
         return this.socket;
+    }
+
+    // Generic event subscription (passthrough)
+    on<T = any>(event: string, callback: (data: T) => void): void {
+        if (this.socket) {
+            this.socket.on(event, callback as any);
+        }
     }
 
     disconnect(): void {
@@ -74,6 +90,12 @@ class SocketService {
         }
     }
 
+    onBB84Error(callback: (data: { error: string }) => void): void {
+        if (this.socket) {
+            this.socket.on('bb84_error', callback);
+        }
+    }
+
     onEveDetected(callback: (data: any) => void): void {
         if (this.socket) {
             this.socket.on('eve_detected', callback);
@@ -81,19 +103,41 @@ class SocketService {
     }
 
     // Message handling
-    sendEncryptedMessage(sessionId: string, senderId: string, encryptedMessage: string): void {
+    sendEncryptedMessage(sessionId: string, senderId: string, messageContent: string): void {
         if (this.socket) {
             this.socket.emit('send_encrypted_message', {
                 session_id: sessionId,
                 sender_id: senderId,
-                encrypted_message: encryptedMessage,
+                message_content: messageContent,
             });
         }
     }
 
-    onEncryptedMessageReceived(callback: (message: EncryptedMessage) => void): void {
+    onEncryptedMessageReceived(callback: (message: IncomingEncryptedMessage) => void): void {
         if (this.socket) {
             this.socket.on('encrypted_message_received', callback);
+        }
+    }
+
+    onEncryptedFileReceived(callback: (data: { message_id: string; sender_id: string; filename: string; file_size: number; timestamp: string }) => void): void {
+        if (this.socket) {
+            this.socket.on('encrypted_file_received', callback);
+        }
+    }
+
+    onMessageDecrypted(callback: (data: { message_id: string; decrypted_content: string; sender_id?: string }) => void): void {
+        if (this.socket) {
+            this.socket.on('message_decrypted', callback);
+        }
+    }
+
+    requestMessageDecryption(sessionId: string, messageId: string, userId: string): void {
+        if (this.socket) {
+            this.socket.emit('decrypt_message', {
+                session_id: sessionId,
+                message_id: messageId,
+                user_id: userId,
+            });
         }
     }
 
@@ -140,6 +184,13 @@ class SocketService {
         }
     }
 
+    // Security events
+    onSecurityViolation(callback: (violation: { timestamp: string; violation: string; severity?: string; session_id?: string }) => void): void {
+        if (this.socket) {
+            this.socket.on('security_violation', callback);
+        }
+    }
+
     // Remove listeners
     removeAllListeners(): void {
         if (this.socket) {
@@ -161,6 +212,12 @@ class SocketService {
     // Check connection status
     isConnected(): boolean {
         return this.socket?.connected || false;
+    }
+
+    // Cleanup helper: remove listeners and disconnect
+    cleanup(): void {
+        this.removeAllListeners();
+        this.disconnect();
     }
 }
 

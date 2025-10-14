@@ -1,39 +1,35 @@
-aiohappyeyeballs==2.6.1
-aiohttp==3.12.15
-aiosignal==1.4.0
-annotated-types==0.7.0
-anyio==4.10.0
-attrs==25.3.0
-bidict==0.23.1
-cffi==2.0.0
-click==8.2.1
-colorama==0.4.6
-cryptography==45.0.7
-dill==0.4.0
-fastapi==0.116.1
-frozenlist==1.7.0
-h11==0.16.0
-idna==3.10
-multidict==6.6.4
-numpy==2.3.3
-propcache==0.3.2
-pycparser==2.23
-pydantic==2.11.7
-pydantic_core==2.33.2
-python-engineio==4.12.2
-python-multipart==0.0.20
-python-socketio==5.13.0
-qiskit==2.1.2
-qiskit-aer==0.17.1
-rustworkx==0.17.1
-scipy==1.16.2
-simple-websocket==1.1.0
-sniffio==1.3.1
-starlette==0.47.3
-stevedore==5.5.0
-typing-inspection==0.4.1
-typing_extensions==4.15.0
-uvicorn==0.35.0
-wsproto==1.2.0
-yarl==1.20.1
+# BB84 QKD Simulation System - Enhanced Cryptography Requirements
 
+# Core Web Framework
+fastapi==0.104.1
+uvicorn==0.24.0
+python-socketio[asyncio_client]==5.9.0
+python-multipart==0.0.6
+pydantic==2.4.2
+
+# Quantum Simulation
+qiskit==0.44.2
+qiskit-aer==0.17.2
+numpy==1.25.2
+
+# Enhanced Cryptography
+cryptography==41.0.7           # HKDF, HMAC, and other primitives
+PyNaCl==1.5.0                  # XChaCha20-Poly1305 via libsodium
+hashlib-compat==1.7.3          # SHA3 compatibility
+
+# Optional Post-Quantum Cryptography (uncomment if needed)
+# liboqs-python==0.8.0         # Open Quantum Safe library
+# pqcrypto==0.20.1             # Pure Python PQC implementations
+
+# Development & Utilities
+python-dotenv==1.0.0
+pytest==7.4.3                  # For testing
+pytest-asyncio==0.21.1         # Async testing support
+
+# Security & Monitoring
+bcrypt==4.0.1                   # For password hashing (if user auth added)
+python-jose[cryptography]==3.3.0  # JWT tokens (if needed)
+
+# Performance (optional)
+# uvloop==0.19.0                # High-performance event loop (Unix only)
+# orjson==3.9.10                # Fast JSON serialization
