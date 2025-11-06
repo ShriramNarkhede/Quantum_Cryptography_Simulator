@@ -17,9 +17,9 @@ cryptography==41.0.7           # HKDF, HMAC, and other primitives
 PyNaCl==1.5.0                  # XChaCha20-Poly1305 via libsodium
 hashlib-compat==1.7.3          # SHA3 compatibility
 
-# Optional Post-Quantum Cryptography (uncomment if needed)
-# liboqs-python==0.8.0         # Open Quantum Safe library
-# pqcrypto==0.20.1             # Pure Python PQC implementations
+# Post-Quantum Cryptography
+liboqs-python==0.8.0         # Open Quantum Safe library (NIST-approved algorithms)
+pqcrypto==0.20.1             # Pure Python PQC implementations (backup)
 
 # Development & Utilities
 python-dotenv==1.0.0

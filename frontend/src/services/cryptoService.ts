@@ -36,6 +36,11 @@ export interface EncryptedMessagePayload {
       file_count: number;
       key_stream_usage: number;
       total_key_stream_bytes: number;
+      pqc_available?: boolean;
+      has_kyber_keys?: boolean;
+      has_dilithium_keys?: boolean;
+      kyber_algorithm?: string;
+      dilithium_algorithm?: string;
     };
     final_key_length: number;
     session_age_seconds: number;
@@ -316,6 +321,7 @@ import type { QBERDataPoint, SessionHealthAssessment, EncryptionStatus } from '.
       keyStreamUsed: string;
       sessionAge: string;
       securityLevel: string;
+      pqcStatus: string;
     } {
       if (!this.cryptoInfo) {
         return {
@@ -323,20 +329,35 @@ import type { QBERDataPoint, SessionHealthAssessment, EncryptionStatus } from '.
           filesEncrypted: 0,
           keyStreamUsed: '0 bytes',
           sessionAge: '0s',
-          securityLevel: 'None'
+          securityLevel: 'None',
+          pqcStatus: 'Not Available'
         };
       }
-  
+
       const stats = this.cryptoInfo.crypto_stats;
       const ageMinutes = Math.floor(this.cryptoInfo.session_age_seconds / 60);
       const ageSeconds = Math.floor(this.cryptoInfo.session_age_seconds % 60);
-  
+
+      let pqcStatus = 'Not Available';
+      if (stats.pqc_available) {
+        if (stats.has_kyber_keys && stats.has_dilithium_keys) {
+          pqcStatus = `${stats.kyber_algorithm} + ${stats.dilithium_algorithm}`;
+        } else if (stats.has_kyber_keys) {
+          pqcStatus = stats.kyber_algorithm || 'Kyber Available';
+        } else if (stats.has_dilithium_keys) {
+          pqcStatus = stats.dilithium_algorithm || 'Dilithium Available';
+        } else {
+          pqcStatus = 'Keys Generated';
+        }
+      }
+
       return {
         messagesEncrypted: stats.message_count,
         filesEncrypted: stats.file_count,
         keyStreamUsed: this.formatFileSize(stats.total_key_stream_bytes),
         sessionAge: ageMinutes > 0 ? `${ageMinutes}m ${ageSeconds}s` : `${ageSeconds}s`,
-        securityLevel: this.isHybridMode() ? 'Quantum + Post-Quantum' : 'Quantum Only'
+        securityLevel: this.isHybridMode() ? 'Quantum + Post-Quantum' : 'Quantum Only',
+        pqcStatus: pqcStatus
       };
     }
   

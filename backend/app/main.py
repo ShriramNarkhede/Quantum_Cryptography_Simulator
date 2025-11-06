@@ -358,6 +358,179 @@ async def download_raw_encrypted_file(session_id: str, message_id: str, user_id:
         logger.error(f"Error downloading encrypted file: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to download encrypted file")
 
+@app.get("/session/{session_id}/pqc/info")
+async def get_pqc_info(session_id: str):
+    """Get PQC capabilities and information"""
+    try:
+        from app.services.pqc_service import pqc_service
+        pqc_info = pqc_service.get_pqc_info()
+        
+        return {
+            "session_id": session_id,
+            "pqc_info": pqc_info,
+            "status": "available" if pqc_info["liboqs_available"] or pqc_info["pqcrypto_available"] else "demo_only"
+        }
+    except Exception as e:
+        logger.error(f"Error getting PQC info: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get PQC information")
+
+@app.get("/session/{session_id}/pqc/public_keys")
+async def get_pqc_public_keys(session_id: str):
+    """Get PQC public keys for key exchange"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session.crypto_session.key_established:
+        raise HTTPException(status_code=400, detail="No cryptographic keys established")
+    
+    try:
+        public_keys = session.crypto_session.crypto_service.get_pqc_public_keys()
+        if not public_keys:
+            raise HTTPException(status_code=400, detail="No PQC keys available")
+        
+        # Convert bytes to hex for JSON transport
+        hex_keys = {}
+        for key_type, key_bytes in public_keys.items():
+            hex_keys[key_type] = key_bytes.hex()
+        
+        return {
+            "session_id": session_id,
+            "public_keys": hex_keys,
+            "key_types": list(public_keys.keys())
+        }
+    except Exception as e:
+        logger.error(f"Error getting PQC public keys: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get PQC public keys")
+
+@app.post("/session/{session_id}/pqc/encapsulate")
+async def encapsulate_pqc_key(session_id: str, request: dict):
+    """Encapsulate a shared secret using peer's Kyber public key"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session.crypto_session.key_established:
+        raise HTTPException(status_code=400, detail="No cryptographic keys established")
+    
+    try:
+        peer_kyber_public_hex = request.get("peer_kyber_public")
+        if not peer_kyber_public_hex:
+            raise HTTPException(status_code=400, detail="peer_kyber_public required")
+        
+        peer_kyber_public = bytes.fromhex(peer_kyber_public_hex)
+        
+        result = session.crypto_session.crypto_service.encapsulate_shared_secret(peer_kyber_public)
+        if not result:
+            raise HTTPException(status_code=400, detail="PQC encapsulation failed")
+        
+        ciphertext, shared_secret = result
+        
+        return {
+            "session_id": session_id,
+            "ciphertext": ciphertext.hex(),
+            "shared_secret": shared_secret.hex(),
+            "algorithm": "Kyber512"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid hex data: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error encapsulating PQC key: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to encapsulate PQC key")
+
+@app.post("/session/{session_id}/pqc/decapsulate")
+async def decapsulate_pqc_key(session_id: str, request: dict):
+    """Decapsulate shared secret using our Kyber private key"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session.crypto_session.key_established:
+        raise HTTPException(status_code=400, detail="No cryptographic keys established")
+    
+    try:
+        ciphertext_hex = request.get("ciphertext")
+        if not ciphertext_hex:
+            raise HTTPException(status_code=400, detail="ciphertext required")
+        
+        ciphertext = bytes.fromhex(ciphertext_hex)
+        
+        shared_secret = session.crypto_session.crypto_service.decapsulate_shared_secret(ciphertext)
+        if not shared_secret:
+            raise HTTPException(status_code=400, detail="PQC decapsulation failed")
+        
+        return {
+            "session_id": session_id,
+            "shared_secret": shared_secret.hex(),
+            "algorithm": "Kyber512"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid hex data: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error decapsulating PQC key: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to decapsulate PQC key")
+
+@app.post("/session/{session_id}/pqc/sign")
+async def sign_message_pqc(session_id: str, request: dict):
+    """Sign a message using Dilithium"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session.crypto_session.key_established:
+        raise HTTPException(status_code=400, detail="No cryptographic keys established")
+    
+    try:
+        message = request.get("message", "").encode('utf-8')
+        if not message:
+            raise HTTPException(status_code=400, detail="message required")
+        
+        signature = session.crypto_session.crypto_service.sign_message_pqc(message)
+        if not signature:
+            raise HTTPException(status_code=400, detail="PQC signing failed")
+        
+        return {
+            "session_id": session_id,
+            "signature": signature.hex(),
+            "message": message.decode('utf-8'),
+            "algorithm": "Dilithium2"
+        }
+    except Exception as e:
+        logger.error(f"Error signing message with PQC: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to sign message with PQC")
+
+@app.post("/session/{session_id}/pqc/verify")
+async def verify_signature_pqc(session_id: str, request: dict):
+    """Verify a Dilithium signature"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    try:
+        signature_hex = request.get("signature")
+        message = request.get("message", "").encode('utf-8')
+        public_key_hex = request.get("public_key")
+        
+        if not all([signature_hex, message, public_key_hex]):
+            raise HTTPException(status_code=400, detail="signature, message, and public_key required")
+        
+        signature = bytes.fromhex(signature_hex)
+        public_key = bytes.fromhex(public_key_hex)
+        
+        is_valid = session.crypto_session.crypto_service.verify_signature_pqc(signature, message, public_key)
+        
+        return {
+            "session_id": session_id,
+            "valid": is_valid,
+            "message": message.decode('utf-8'),
+            "algorithm": "Dilithium2"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid hex data: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error verifying PQC signature: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to verify PQC signature")
+
 @app.post("/session/{session_id}/terminate")
 async def terminate_session(session_id: str):
     """Terminate session and clear all ephemeral data"""
@@ -606,14 +779,40 @@ async def run_bb84_simulation(session_id: str, n_bits: int, test_fraction: float
         # Generate PQC key if hybrid mode requested
         pqc_key = None
         if use_hybrid:
-            # In a real implementation, this would involve proper PQC KEM
-            # For demo, we'll generate a random 32-byte key
-            import secrets
-            pqc_key = secrets.token_bytes(32)
-            await sio.emit("pqc_key_generated", {
-                "key_length": len(pqc_key),
-                "algorithm": "demo-kyber-like"
-            }, room=room_name)
+            # Generate real PQC shared secret using Kyber KEM
+            try:
+                from app.services.pqc_service import pqc_service
+                
+                # Generate Kyber key pair for Alice
+                alice_kyber_keys = pqc_service.generate_kyber_keypair()
+                
+                # Bob encapsulates a shared secret using Alice's public key
+                ciphertext_obj = pqc_service.encapsulate_key(alice_kyber_keys.public_key)
+                pqc_key = ciphertext_obj.shared_secret
+                
+                # Store Alice's private key for later decapsulation (in real implementation, this would be exchanged)
+                # For demo purposes, we'll use the shared secret directly
+                
+                await sio.emit("pqc_key_generated", {
+                    "key_length": len(pqc_key),
+                    "algorithm": "Kyber512",
+                    "ciphertext_length": len(ciphertext_obj.ciphertext),
+                    "public_key_length": len(alice_kyber_keys.public_key),
+                    "private_key_length": len(alice_kyber_keys.private_key)
+                }, room=room_name)
+                
+                logger.info(f"Generated real PQC key using Kyber512: {len(pqc_key)} bytes")
+                
+            except Exception as e:
+                logger.error(f"Failed to generate real PQC key: {e}")
+                # Fallback to demo PQC key
+                import secrets
+                pqc_key = secrets.token_bytes(32)
+                await sio.emit("pqc_key_generated", {
+                    "key_length": len(pqc_key),
+                    "algorithm": "demo-kyber-like",
+                    "error": str(e)
+                }, room=room_name)
         
         async for progress_data in bb84_engine.run_simulation(
             n_bits, test_fraction, eve_params, eve_module if eve_present else None

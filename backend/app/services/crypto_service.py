@@ -21,6 +21,14 @@ from nacl.bindings import (
 from nacl.public import PrivateKey, PublicKey, Box
 import logging
 
+# Import PQC service
+try:
+    from app.services.pqc_service import pqc_service, KyberKeyPair, DilithiumKeyPair
+    PQC_AVAILABLE = True
+except ImportError:
+    PQC_AVAILABLE = False
+    logger.warning("PQC service not available")
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +39,8 @@ class DerivedKeys:
     key_mac: bytes         # 32 bytes for HMAC-SHA3-256
     key_file: bytes        # 32 bytes for XChaCha20-Poly1305
     master_key: bytes      # Original BB84 key (kept for reference)
+    pqc_kyber_keys: Optional[KyberKeyPair] = None  # PQC KEM keys
+    pqc_dilithium_keys: Optional[DilithiumKeyPair] = None  # PQC signature keys
     
     def clear(self):
         """Securely clear all key material"""
@@ -43,6 +53,14 @@ class DerivedKeys:
             self.key_file = secrets.token_bytes(len(self.key_file))
         if hasattr(self, 'master_key'):
             self.master_key = secrets.token_bytes(len(self.master_key))
+        
+        # Clear PQC keys if available
+        if PQC_AVAILABLE and self.pqc_kyber_keys:
+            pqc_service.clear_keys(self.pqc_kyber_keys)
+            self.pqc_kyber_keys = None
+        if PQC_AVAILABLE and self.pqc_dilithium_keys:
+            pqc_service.clear_keys(self.pqc_dilithium_keys)
+            self.pqc_dilithium_keys = None
 
 
 @dataclass
@@ -356,11 +374,31 @@ class CryptoService:
         final_key = hkdf.derive(hybrid_key_material)
         
         logger.info(f"Created hybrid key (BB84 + PQC) for session {session_id}")
-        return self.derive_keys(final_key, session_id)
+        
+        # Generate PQC keys for the session
+        derived_keys = self.derive_keys(final_key, session_id)
+        
+        if PQC_AVAILABLE:
+            try:
+                # Generate Kyber KEM key pair
+                kyber_keys = pqc_service.generate_kyber_keypair()
+                derived_keys.pqc_kyber_keys = kyber_keys
+                
+                # Generate Dilithium signature key pair
+                dilithium_keys = pqc_service.generate_dilithium_keypair()
+                derived_keys.pqc_dilithium_keys = dilithium_keys
+                
+                logger.info(f"Generated PQC keys: Kyber={kyber_keys.algorithm}, Dilithium={dilithium_keys.algorithm}")
+                
+            except Exception as e:
+                logger.error(f"Failed to generate PQC keys: {e}")
+                logger.warning("Continuing with BB84-only keys")
+        
+        return derived_keys
     
     def get_session_stats(self) -> Dict[str, Any]:
         """Get statistics about current cryptographic session"""
-        return {
+        stats = {
             'session_id': self.session_id,
             'message_count': self.message_seq_counter,
             'file_count': self.file_seq_counter,
@@ -368,6 +406,21 @@ class CryptoService:
             'has_keys': self.derived_keys is not None,
             'total_key_stream_bytes': sum(end - start for start, end in self.used_key_stream_offsets)
         }
+        
+        # Add PQC information if available
+        if PQC_AVAILABLE and self.derived_keys:
+            stats['pqc_available'] = True
+            stats['has_kyber_keys'] = self.derived_keys.pqc_kyber_keys is not None
+            stats['has_dilithium_keys'] = self.derived_keys.pqc_dilithium_keys is not None
+            
+            if self.derived_keys.pqc_kyber_keys:
+                stats['kyber_algorithm'] = self.derived_keys.pqc_kyber_keys.algorithm
+            if self.derived_keys.pqc_dilithium_keys:
+                stats['dilithium_algorithm'] = self.derived_keys.pqc_dilithium_keys.algorithm
+        else:
+            stats['pqc_available'] = False
+        
+        return stats
     
     def clear_session(self):
         """Securely clear all session data and keys"""
@@ -381,6 +434,101 @@ class CryptoService:
         self.session_id = None
         
         logger.info("Cryptographic session cleared")
+    
+    def get_pqc_public_keys(self) -> Optional[Dict[str, bytes]]:
+        """Get PQC public keys for key exchange"""
+        if not PQC_AVAILABLE or not self.derived_keys:
+            return None
+        
+        public_keys = {}
+        
+        if self.derived_keys.pqc_kyber_keys:
+            public_keys['kyber_public'] = self.derived_keys.pqc_kyber_keys.public_key
+        
+        if self.derived_keys.pqc_dilithium_keys:
+            public_keys['dilithium_public'] = self.derived_keys.pqc_dilithium_keys.public_key
+        
+        return public_keys if public_keys else None
+    
+    def encapsulate_shared_secret(self, peer_kyber_public: bytes) -> Optional[Tuple[bytes, bytes]]:
+        """
+        Encapsulate a shared secret using peer's Kyber public key
+        
+        Args:
+            peer_kyber_public: Peer's Kyber public key
+            
+        Returns:
+            Tuple of (ciphertext, shared_secret) or None if PQC not available
+        """
+        if not PQC_AVAILABLE:
+            return None
+        
+        try:
+            ciphertext_obj = pqc_service.encapsulate_key(peer_kyber_public)
+            return ciphertext_obj.ciphertext, ciphertext_obj.shared_secret
+        except Exception as e:
+            logger.error(f"Failed to encapsulate shared secret: {e}")
+            return None
+    
+    def decapsulate_shared_secret(self, ciphertext: bytes) -> Optional[bytes]:
+        """
+        Decapsulate shared secret using our Kyber private key
+        
+        Args:
+            ciphertext: Kyber ciphertext
+            
+        Returns:
+            Shared secret bytes or None if PQC not available
+        """
+        if not PQC_AVAILABLE or not self.derived_keys or not self.derived_keys.pqc_kyber_keys:
+            return None
+        
+        try:
+            return pqc_service.decapsulate_key(ciphertext, self.derived_keys.pqc_kyber_keys.private_key)
+        except Exception as e:
+            logger.error(f"Failed to decapsulate shared secret: {e}")
+            return None
+    
+    def sign_message_pqc(self, message: bytes) -> Optional[bytes]:
+        """
+        Sign a message using Dilithium
+        
+        Args:
+            message: Message to sign
+            
+        Returns:
+            Signature bytes or None if PQC not available
+        """
+        if not PQC_AVAILABLE or not self.derived_keys or not self.derived_keys.pqc_dilithium_keys:
+            return None
+        
+        try:
+            signature_obj = pqc_service.sign_message(message, self.derived_keys.pqc_dilithium_keys.private_key)
+            return signature_obj.signature
+        except Exception as e:
+            logger.error(f"Failed to sign message with PQC: {e}")
+            return None
+    
+    def verify_signature_pqc(self, signature: bytes, message: bytes, public_key: bytes) -> bool:
+        """
+        Verify a Dilithium signature
+        
+        Args:
+            signature: Dilithium signature
+            message: Original message
+            public_key: Dilithium public key
+            
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        if not PQC_AVAILABLE:
+            return False
+        
+        try:
+            return pqc_service.verify_signature(signature, message, public_key)
+        except Exception as e:
+            logger.error(f"Failed to verify PQC signature: {e}")
+            return False
 
 
 # Utility functions for integration
