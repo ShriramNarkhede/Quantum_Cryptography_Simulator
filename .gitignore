@@ -10,7 +10,7 @@ env/
 ENV/
 
 
-./backend/app/main.py
+main.py
 
 # Node.js
 node_modules/
@@ -56,6 +56,13 @@ readme.txt
 README_BACKUP.md
 README_CRYPTO.md
 README_SYSTEM_COMPONENTS.md
+README_SYSTEM_ARCHITECTURE.md
+COMPONENT_BLOCK_DIAGRAM.md
+COMPONENT_DIAGRAM_SIMPLE.md
+PROJECT_OBJECTIVES.md
+bb84_comprehensive_docs.md
+bb84_qkd_docs.md
+bb84_qkd_docs.md
 README_PQC.md
 bb84_comprehensive_docs.md
 b.bat
