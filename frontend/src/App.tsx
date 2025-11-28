@@ -1,15 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Shield, Wifi, WifiOff, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Shield, Wifi, WifiOff, AlertTriangle, Menu, X } from 'lucide-react';
 import SessionManager from './components/SessionManager';
 import BB84Simulator from './components/BB84Simulator';
 import ChatInterface from './components/ChatInterface';
 import EveControlPanel from './components/EveControlPanel';
-import StatusBar from './components/StatusBar';
 import CryptoMonitor from './components/CryptoMonitor';
 import SecurityDashboard from "./components/SecurityDashboard";
+import SessionControlPanel from './components/SessionControlPanel';
+import KeyStatusPanel from './components/KeyStatusPanel';
+import FileTransferModule from './components/FileTransferModule';
+import QBERAlertModal from './components/QBERAlertModal';
+import ThemeToggle from './components/ThemeToggle';
+import CollapsibleSection from './components/CollapsibleSection';
 import socketService from './services/socketService';
 import apiService from './services/apiService';
 import cryptoService from './services/cryptoService';
+import AuthPage from './components/AuthPage';
+import { useBreakpoint } from './hooks/useBreakpoint';
 import type{ 
   User, 
   Session, 
@@ -21,6 +28,11 @@ import type{
 } from './types';
 
 const App: React.FC = () => {
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    try {
+      return typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    } catch { return null; }
+  });
   const [state, setState] = useState<AppState>({
     currentUser: null,
     currentSession: null,
@@ -43,6 +55,17 @@ const App: React.FC = () => {
     message: string;
     timestamp: Date;
   }>>([]);
+  const [highContrast, setHighContrast] = useState(false);
+  const [showQBERModal, setShowQBERModal] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isMobile, isTablet, isDesktop } = useBreakpoint();
+  const isNarrowScreen = !isDesktop;
+
+  useEffect(() => {
+    if (!isNarrowScreen) {
+      setMobileMenuOpen(false);
+    }
+  }, [isNarrowScreen]);
 
   // Initialize app on mount
   useEffect(() => {
@@ -50,6 +73,14 @@ const App: React.FC = () => {
     return () => {
       cleanup();
     };
+  }, []);
+
+  // Track auth token changes
+  useEffect(() => {
+    try {
+      const t = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      setAuthToken(t);
+    } catch {}
   }, []);
 
   // Auto-refresh server health
@@ -60,6 +91,16 @@ const App: React.FC = () => {
     }, 30000); // Check every 30 seconds
 
     return () => clearInterval(healthCheckInterval);
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle('high-contrast', highContrast);
+  }, [highContrast]);
+
+  const formatSessionId = useCallback((value?: string) => {
+    if (!value) return '—';
+    const compact = value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase();
+    return compact.replace(/(.{4})/g, '$1-').replace(/-$/, '');
   }, []);
 
   // Periodically refresh crypto info while a session is active
@@ -104,6 +145,12 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLogout = () => {
+    apiService.removeAuthToken();
+    setAuthToken(null);
+    addNotification('info', 'Logged out');
+  };
+
   const setupSocketConnection = async () => {
     socketService.connect();
     
@@ -144,6 +191,7 @@ const App: React.FC = () => {
       if (progress.qber_exceeded) {
         setState(prev => ({ ...prev, eveDetected: true }));
         addNotification('error', 'Eavesdropping detected via QBER analysis!');
+        setShowQBERModal(true);
       }
     });
 
@@ -551,72 +599,6 @@ const App: React.FC = () => {
     }
   };
 
-  const ensureSessionKeyReady = async (): Promise<boolean> => {
-    if (!state.currentSession) return false;
-    
-    // Check if we have a valid session key
-    if (state.sessionKey && state.sessionKey.length === 32) {
-      console.log('Session key already ready:', state.sessionKey.length, 'bytes');
-      return true;
-    }
-    
-    // Try to fetch the session key
-    try {
-      console.log('Session key not ready, fetching...');
-      addNotification('info', 'Ensuring session key is ready...');
-      
-      // Fetch the key and wait for it to be processed
-      const keyResponse = await apiService.getSessionKey(state.currentSession.session_id);
-      console.log('Key response in ensureSessionKeyReady:', keyResponse);
-      
-      if (keyResponse.key && keyResponse.key_length === 32) {
-        // Process the key immediately
-        const cleanHex = keyResponse.key.replace(/[^0-9a-fA-F]/g, '');
-        if (cleanHex.length !== 64) {
-          throw new Error(`Invalid hex string length: ${cleanHex.length} (expected 64)`);
-        }
-        
-        let sessionKey = new Uint8Array(cleanHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
-        
-        if (sessionKey.length !== 32) {
-          console.warn(`Key length is ${sessionKey.length} bytes, adjusting to 32 bytes`);
-          const adjustedKey = new Uint8Array(32);
-          if (sessionKey.length < 32) {
-            adjustedKey.set(sessionKey, 0);
-          } else {
-            adjustedKey.set(sessionKey.slice(0, 32));
-          }
-          sessionKey = adjustedKey;
-        }
-        
-        // Update both crypto service and state immediately
-        cryptoService.setSessionKey(sessionKey);
-        setState(prev => ({ ...prev, sessionKey }));
-        
-        // Verify the key was set correctly
-        const verifyKey = cryptoService.getSessionKey();
-        console.log('Session key ready after fetch:', sessionKey.length, 'bytes');
-        console.log('Verification - crypto service key:', verifyKey?.length, 'bytes');
-        
-        if (!verifyKey || verifyKey.length !== 32) {
-          console.error('Failed to set session key in crypto service');
-          return false;
-        }
-        
-        addNotification('success', 'Session key is now ready');
-        return true;
-      } else {
-        console.error('Invalid key response in ensureSessionKeyReady:', keyResponse);
-        addNotification('error', 'Invalid session key received from server');
-        return false;
-      }
-    } catch (error) {
-      console.error('Failed to ensure session key is ready:', error);
-      addNotification('error', 'Failed to retrieve session key');
-      return false;
-    }
-  };
-
   const handleSendMessage = async (content: string) => {
     if (!state.currentUser || !state.currentSession || !state.sessionKey) return;
 
@@ -760,105 +742,407 @@ const App: React.FC = () => {
     cryptoService.clear();
   };
 
-  const renderMainInterface = () => {
-    if (!state.currentUser || !state.currentSession) {
-      return (
-        <SessionManager 
-          onSessionJoin={handleSessionJoin} 
-          serverOnline={state.serverOnline} 
-        />
-      );
-    }
+  const renderHeader = () => {
+    const hasActiveSession = Boolean(state.currentSession && state.currentUser);
 
     return (
-      <div className="space-y-6">
-        {/* Security Dashboard Toggle */}
-        <div className="flex justify-end">
+      <header className="mb-6 space-y-4">
+        <div className="glass-card glow-border flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            {hasActiveSession && (
+              <button
+                type="button"
+                className="copy-button lg:hidden"
+                aria-label="Toggle session panel"
+                onClick={() => setMobileMenuOpen(prev => !prev)}
+              >
+                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
+            )}
+            <Shield className="hidden sm:block w-10 h-10 text-[var(--info)]" />
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-[var(--text-muted)]">BB84 QKD Simulator</p>
+              <h1 className="font-semibold text-[var(--text-primary)]" style={{ fontSize: 'var(--font-hero)', lineHeight: 1.2 }}>
+                Quantum Lab Control
+              </h1>
+              <p className="text-sm text-[var(--text-secondary)] hidden md:block">Monitor quantum key exchanges with complete clarity</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
+            <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
+              {getConnectionStatusIcon()}
+              <span>{getConnectionStatusText()}</span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${state.serverOnline ? 'text-[var(--success)]' : 'text-[var(--eve)]'}`}>
+                {state.serverOnline ? 'Server Online' : 'Server Offline'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+              {state.currentSession && (
+                <div className="hidden md:flex items-center gap-2 font-mono text-sm text-[var(--text-secondary)]">
+                  <span className="uppercase text-[var(--text-muted)] text-xs tracking-wide">Session</span>
+                  <span>{formatSessionId(state.currentSession.session_id)}</span>
+                </div>
+              )}
+              <ThemeToggle compact={isNarrowScreen} />
+              <button
+                type="button"
+                onClick={() => setHighContrast(prev => !prev)}
+                className={`copy-button ${highContrast ? 'text-[var(--success)]' : ''}`}
+              >
+                {highContrast ? 'Contrast: High' : 'Contrast'}
+              </button>
+              {authToken && (
+                <button
+                  onClick={handleLogout}
+                  className="copy-button"
+                >
+                  Logout
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        {mobileMenuOpen && hasActiveSession && (
+          <div className="glass-card glow-border lg:hidden">
+            <SessionControlPanel
+              session={state.currentSession}
+              user={state.currentUser}
+              isConnected={state.isConnected}
+              serverOnline={state.serverOnline}
+              eveDetected={state.eveDetected}
+              sessionKeyReady={!!state.sessionKey}
+              highContrast={highContrast}
+              onToggleHighContrast={() => setHighContrast(prev => !prev)}
+            />
+          </div>
+        )}
+      </header>
+    );
+  };
+
+  const resolveMessageType = (senderId: string, currentUserId?: string | null): 'system' | 'sent' | 'received' => {
+    if (senderId === 'system') return 'system';
+    return senderId === currentUserId ? 'sent' : 'received';
+  };
+
+  const buildChatMessages = (currentUserId: string | null) => state.messages.map(m => ({
+    message_id: m.message_id,
+    sender_id: m.sender_id,
+    content: m.decrypted_content ?? (m.message_type === 'system' ? (m.encrypted_payload as any)?.content : undefined),
+    encrypted_content: m.message_type === 'chat_otp' ? (m.encrypted_payload as any)?.ciphertext : undefined,
+    timestamp: m.timestamp,
+    type: resolveMessageType(m.sender_id, currentUserId),
+    file_info: m.message_type === 'file_xchacha20' ? {
+      filename: (m.encrypted_payload as any)?.filename || 'Unknown file',
+      file_size: (m.encrypted_payload as any)?.file_size || 0,
+      encrypted: true,
+      download_ready: true
+    } : undefined
+  }));
+
+  const renderSecurityInsights = (options?: { stacked?: boolean }) => {
+    const stacked = options?.stacked ?? false;
+    return (
+      <div className="space-y-4">
+        <div className={`flex ${stacked ? 'justify-start' : 'justify-end'}`}>
           <button
-            onClick={() => setShowSecurityDashboard(!showSecurityDashboard)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              showSecurityDashboard
-                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            onClick={() => setShowSecurityDashboard(prev => !prev)}
+            className={`copy-button ${stacked ? 'w-full text-center' : ''}`}
           >
-            {showSecurityDashboard ? 'Hide' : 'Show'} Security Dashboard
+            {showSecurityDashboard ? 'Hide Security Dashboard' : 'Show Security Dashboard'}
           </button>
         </div>
-
-        {/* Security Dashboard */}
         {showSecurityDashboard && (
-          <SecurityDashboard
-            cryptoInfo={state.cryptoInfo}
-            qberHistory={state.qberHistory}
-            securityViolations={state.securityViolations}
-            sessionHealth={cryptoService.getSessionHealthAssessment()}
-          />
-        )}
-
-        {/* Main Content */}
-        <div className="flex flex-col xl:flex-row gap-6">
-          {/* Left Panel - BB84 and Controls */}
-          <div className="flex-1 space-y-6">
-            <BB84Simulator
-              progress={state.bb84Progress}
-              sessionKey={state.sessionKey}
-              onStartBB84={handleStartBB84}
-              onRetrySessionKey={handleRetrySessionKey}
-              userRole={state.currentUser.role}
-              eveDetected={state.eveDetected}
+          <div className="glass-card glow-border">
+            <SecurityDashboard
               cryptoInfo={state.cryptoInfo}
               qberHistory={state.qberHistory}
+              securityViolations={state.securityViolations}
+              sessionHealth={cryptoService.getSessionHealthAssessment()}
             />
-            
-            {state.currentUser.role === 'eve' && (
-              <EveControlPanel
-                sessionId={state.currentSession.session_id}
-                onEveParamsChange={(params) => {
-                  socketService.updateEveParams(state.currentSession!.session_id, params);
-                }}
-              />
-            )}
           </div>
-
-          {/* Right Panel - Communication and Monitoring */}
-          <div className="xl:w-96 space-y-6">
-            <ChatInterface
-              messages={state.messages.map(m => ({
-                message_id: m.message_id,
-                sender_id: m.sender_id,
-                content: m.decrypted_content ?? (m.message_type === 'system' ? (m.encrypted_payload as any)?.content : undefined),
-                encrypted_content: m.message_type === 'chat_otp' ? (m.encrypted_payload as any)?.ciphertext : undefined,
-                timestamp: m.timestamp,
-                type: m.sender_id === 'system' ? 'system' : (m.sender_id === state.currentUser?.user_id ? 'sent' : 'received'),
-                file_info: m.message_type === 'file_xchacha20' ? {
-                  filename: (m.encrypted_payload as any)?.filename || 'Unknown file',
-                  file_size: (m.encrypted_payload as any)?.file_size || 0,
-                  encrypted: true,
-                  download_ready: true
-                } : undefined
-              }))}
-              onSendMessage={handleSendMessage}
-              onDecryptMessage={handleDecryptMessage}
-              onFileUpload={handleFileUpload}
-              onFileDownload={handleFileDownload}
-              onEnsureSessionKeyReady={ensureSessionKeyReady}
-              currentUser={state.currentUser}
-              sessionKey={state.sessionKey}
-              sessionId={state.currentSession?.session_id}
-              disabled={!state.sessionKey || state.eveDetected}
-              autoScroll={false}
-            />
-            
-            <CryptoMonitor
-              cryptoInfo={state.cryptoInfo}
-              encryptionStatus={cryptoService.getEncryptionStatus()}
-              securityRecommendations={cryptoService.getSecurityRecommendations()}
-            />
+        )}
+        <div className={`grid gap-6 ${stacked ? '' : 'lg:grid-cols-2'}`}>
+          <CryptoMonitor
+            cryptoInfo={state.cryptoInfo}
+            encryptionStatus={cryptoService.getEncryptionStatus()}
+            securityRecommendations={cryptoService.getSecurityRecommendations()}
+          />
+          <div className="glass-card glow-border space-y-3 text-sm text-[var(--text-secondary)]">
+            <p className="metric-label">Session Metrics</p>
+            <div className="grid grid-cols-2 gap-4 text-[var(--text-primary)]">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-[var(--text-muted)]">Secure Messages</p>
+                <p className="text-2xl font-semibold">{state.messages.filter(m => m.message_type === 'chat_otp').length}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-widest text-[var(--text-muted)]">Violations</p>
+                <p className="text-2xl font-semibold">{state.securityViolations.length}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     );
+  };
+
+  const renderDesktopLayout = (
+    messages: ReturnType<typeof buildChatMessages>,
+    currentUser: User,
+    currentSession: Session
+  ) => (
+    <div className="space-y-8">
+      <div className="hidden lg:block">
+        <SessionControlPanel
+          session={currentSession}
+          user={currentUser}
+          isConnected={state.isConnected}
+          serverOnline={state.serverOnline}
+          eveDetected={state.eveDetected}
+          sessionKeyReady={!!state.sessionKey}
+          highContrast={highContrast}
+          onToggleHighContrast={() => setHighContrast(prev => !prev)}
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-1 xl:grid-cols-[1.8fr,1fr] items-start">
+        <BB84Simulator
+          progress={state.bb84Progress}
+          sessionKey={state.sessionKey}
+          onStartBB84={handleStartBB84}
+          onRetrySessionKey={handleRetrySessionKey}
+          userRole={currentUser.role}
+          eveDetected={state.eveDetected}
+          cryptoInfo={state.cryptoInfo}
+          qberHistory={state.qberHistory}
+        />
+        <KeyStatusPanel
+          sessionKey={state.sessionKey}
+          progress={state.bb84Progress}
+          eveDetected={state.eveDetected}
+          cryptoInfo={state.cryptoInfo}
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.4fr,0.9fr,0.9fr]">
+        <div className="xl:col-span-1">
+          <ChatInterface
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            onDecryptMessage={handleDecryptMessage}
+            onFileUpload={handleFileUpload}
+            onFileDownload={handleFileDownload}
+            currentUser={currentUser}
+            sessionKey={state.sessionKey}
+            sessionId={currentSession.session_id}
+            disabled={!state.sessionKey || state.eveDetected}
+            autoScroll={false}
+          />
+        </div>
+
+        <div>
+          <FileTransferModule
+            transfers={state.fileTransfers}
+            disabled={!state.sessionKey || state.eveDetected}
+            onUpload={handleFileUpload}
+            onDownload={handleFileDownload}
+          />
+        </div>
+
+        {currentUser.role === 'eve' && (
+          <EveControlPanel
+            sessionId={currentSession.session_id}
+            onEveParamsChange={(params) => {
+              socketService.updateEveParams(currentSession.session_id, params);
+            }}
+          />
+        )}
+      </div>
+
+      {renderSecurityInsights()}
+    </div>
+  );
+
+  const renderTabletLayout = (
+    messages: ReturnType<typeof buildChatMessages>,
+    currentUser: User,
+    currentSession: Session
+  ) => (
+    <div className="space-y-6">
+      <div className="block lg:hidden">
+        <SessionControlPanel
+          session={currentSession}
+          user={currentUser}
+          isConnected={state.isConnected}
+          serverOnline={state.serverOnline}
+          eveDetected={state.eveDetected}
+          sessionKeyReady={!!state.sessionKey}
+          highContrast={highContrast}
+          onToggleHighContrast={() => setHighContrast(prev => !prev)}
+        />
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2 items-start">
+        <BB84Simulator
+          progress={state.bb84Progress}
+          sessionKey={state.sessionKey}
+          onStartBB84={handleStartBB84}
+          onRetrySessionKey={handleRetrySessionKey}
+          userRole={currentUser.role}
+          eveDetected={state.eveDetected}
+          cryptoInfo={state.cryptoInfo}
+          qberHistory={state.qberHistory}
+        />
+        <KeyStatusPanel
+          sessionKey={state.sessionKey}
+          progress={state.bb84Progress}
+          eveDetected={state.eveDetected}
+          cryptoInfo={state.cryptoInfo}
+        />
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <ChatInterface
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          onDecryptMessage={handleDecryptMessage}
+          onFileUpload={handleFileUpload}
+          onFileDownload={handleFileDownload}
+          currentUser={currentUser}
+          sessionKey={state.sessionKey}
+            sessionId={currentSession.session_id}
+          disabled={!state.sessionKey || state.eveDetected}
+          autoScroll={false}
+        />
+        <FileTransferModule
+          transfers={state.fileTransfers}
+          disabled={!state.sessionKey || state.eveDetected}
+          onUpload={handleFileUpload}
+          onDownload={handleFileDownload}
+        />
+      </div>
+
+      {currentUser.role === 'eve' && (
+        <EveControlPanel
+          sessionId={currentSession.session_id}
+          onEveParamsChange={(params) => {
+            socketService.updateEveParams(currentSession.session_id, params);
+          }}
+        />
+      )}
+
+      {renderSecurityInsights({ stacked: true })}
+    </div>
+  );
+
+  const renderMobileLayout = (
+    messages: ReturnType<typeof buildChatMessages>,
+    currentUser: User,
+    currentSession: Session
+  ) => (
+    <div className="space-y-4">
+      <CollapsibleSection title="Session Overview" defaultOpen>
+        <SessionControlPanel
+          session={currentSession}
+          user={currentUser}
+          isConnected={state.isConnected}
+          serverOnline={state.serverOnline}
+          eveDetected={state.eveDetected}
+          sessionKeyReady={!!state.sessionKey}
+          highContrast={highContrast}
+          onToggleHighContrast={() => setHighContrast(prev => !prev)}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Key Status" subtitle="Live quantum key generation" defaultOpen>
+        <KeyStatusPanel
+          sessionKey={state.sessionKey}
+          progress={state.bb84Progress}
+          eveDetected={state.eveDetected}
+          cryptoInfo={state.cryptoInfo}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="BB84 Process" subtitle="Tap to view detailed visualization">
+        <BB84Simulator
+          progress={state.bb84Progress}
+          sessionKey={state.sessionKey}
+          onStartBB84={handleStartBB84}
+          onRetrySessionKey={handleRetrySessionKey}
+          userRole={currentUser.role}
+          eveDetected={state.eveDetected}
+          cryptoInfo={state.cryptoInfo}
+          qberHistory={state.qberHistory}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Secure Chat" defaultOpen>
+        <ChatInterface
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          onDecryptMessage={handleDecryptMessage}
+          onFileUpload={handleFileUpload}
+          onFileDownload={handleFileDownload}
+          currentUser={currentUser}
+          sessionKey={state.sessionKey}
+          sessionId={currentSession.session_id}
+          disabled={!state.sessionKey || state.eveDetected}
+          autoScroll={false}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="File Transfer">
+        <FileTransferModule
+          transfers={state.fileTransfers}
+          disabled={!state.sessionKey || state.eveDetected}
+          onUpload={handleFileUpload}
+          onDownload={handleFileDownload}
+        />
+      </CollapsibleSection>
+
+      {currentUser.role === 'eve' && (
+        <CollapsibleSection title="Eve Control Panel">
+          <EveControlPanel
+            sessionId={currentSession.session_id}
+            onEveParamsChange={(params) => {
+              socketService.updateEveParams(currentSession.session_id, params);
+            }}
+          />
+        </CollapsibleSection>
+      )}
+
+      <CollapsibleSection title="Security Insights">
+        {renderSecurityInsights({ stacked: true })}
+      </CollapsibleSection>
+    </div>
+  );
+
+  const renderMainInterface = () => {
+    const currentUser = state.currentUser;
+    const currentSession = state.currentSession;
+
+    if (!currentUser || !currentSession) {
+      return (
+        <div className="glass-card glow-border">
+          <SessionManager 
+            onSessionJoin={handleSessionJoin} 
+            serverOnline={state.serverOnline} 
+          />
+        </div>
+      );
+    }
+
+    const messages = buildChatMessages(currentUser.user_id);
+
+    if (isMobile) {
+      return renderMobileLayout(messages, currentUser, currentSession);
+    }
+
+    if (isTablet) {
+      return renderTabletLayout(messages, currentUser, currentSession);
+    }
+
+    return renderDesktopLayout(messages, currentUser, currentSession);
   };
 
   const getConnectionStatusIcon = () => {
@@ -873,129 +1157,64 @@ const App: React.FC = () => {
     return 'Connected';
   };
 
-  const getConnectionStatusColor = () => {
-    if (!state.serverOnline) return 'text-red-600';
-    if (!state.isConnected) return 'text-yellow-600';
-    return 'text-green-600';
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Shield className="w-8 h-8 text-quantum-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">BB84 QKD Simulator</h1>
-                <p className="text-sm text-gray-500">Enhanced Cryptography Edition</p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              {/* Connection Status */}
-              <div className="flex items-center space-x-2">
-                {getConnectionStatusIcon()}
-                <span className={`text-sm font-medium ${getConnectionStatusColor()}`}>
-                  {getConnectionStatusText()}
-                </span>
-              </div>
-
-              {/* Security Status */}
-              {state.sessionKey && (
-                <div className="flex items-center space-x-2">
-                  {state.eveDetected ? (
-                    <AlertTriangle className="w-5 h-5 text-red-500" />
-                  ) : (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                  )}
-                  <span className={`text-sm font-medium ${
-                    state.eveDetected ? 'text-red-600' : 'text-green-600'
-                  }`}>
-                    {state.eveDetected ? 'Compromised' : 'Secure'}
-                  </span>
-                </div>
-              )}
-
-              {/* Server Status */}
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                state.serverOnline 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                Server {state.serverOnline ? 'Online' : 'Offline'}
-              </div>
-            </div>
-          </div>
+    <div className="quantum-lab">
+      <div className="quantum-particles">
+        {Array.from({ length: 28 }).map((_, idx) => (
+          <span key={`particle-${idx}`} style={{ left: `${Math.random() * 100}%`, animationDelay: `${idx * 0.4}s` }} />
+        ))}
+      </div>
+      {!authToken && (
+        <AuthPage onSuccess={() => {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+          setAuthToken(token);
+        }} />
+      )}
+      {authToken && (
+        <div className={`quantum-content ${highContrast ? 'high-contrast' : ''}`}>
+          {renderHeader()}
+          {renderMainInterface()}
         </div>
-      </header>
+      )}
 
-      {/* Notifications */}
-      <div className="fixed top-20 right-4 z-50 space-y-2">
+      <div className="fixed top-6 right-6 z-50 space-y-3">
         {notifications.map((notification) => (
           <div
             key={notification.id}
-            className={`p-4 rounded-lg shadow-lg max-w-sm transition-all duration-300 ${
-              notification.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' :
-              notification.type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' :
-              notification.type === 'warning' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-              'bg-blue-100 text-blue-800 border border-blue-200'
-            }`}
+            className="glass-card glow-border min-w-[260px]"
           >
-            <div className="flex items-start">
-              <div className="flex-1">
-                <p className="text-sm font-medium">{notification.message}</p>
-                <p className="text-xs opacity-75 mt-1">
-                  {notification.timestamp.toLocaleTimeString()}
-                </p>
-              </div>
+            <div className="flex items-start gap-3">
+              <div className="text-sm font-semibold text-[var(--text-primary)]">{notification.message}</div>
               <button
                 onClick={() => setNotifications(prev => prev.filter(n => n.id !== notification.id))}
-                className="ml-2 text-gray-400 hover:text-gray-600"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
                 ×
               </button>
             </div>
+            <p className="text-[11px] text-[var(--text-muted)] mt-2">{notification.timestamp.toLocaleTimeString()}</p>
           </div>
         ))}
       </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Status Bar */}
-        <StatusBar
-          currentUser={state.currentUser}
-          currentSession={state.currentSession}
-          bb84Progress={state.bb84Progress}
-          eveDetected={state.eveDetected}
-          hasSessionKey={!!state.sessionKey}
-          // cryptoInfo={state.cryptoInfo}
+      {showQBERModal && state.bb84Progress?.qber !== undefined && (
+        <QBERAlertModal
+          qber={state.bb84Progress.qber}
+          threshold={state.bb84Progress.threshold ?? 0.11}
+          onViewDetails={() => {
+            setShowSecurityDashboard(true);
+            setShowQBERModal(false);
+          }}
+          onAbort={() => {
+            handleSessionEnd();
+            setShowQBERModal(false);
+          }}
+          onClose={() => setShowQBERModal(false)}
         />
-
-        {/* Main Interface */}
-        <div className="mt-6 bg-white rounded-lg shadow-sm p-6 min-h-[600px]">
-          {renderMainInterface()}
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">
-              BB84 QKD Simulation System - Enhanced Cryptography Edition
-            </p>
-            <div className="flex items-center space-x-4 text-xs text-gray-400">
-              <span>Secure Messages: {state.messages.filter(m => m.message_type === 'chat_otp').length}</span>
-              <span>QBER: {state.cryptoInfo?.qber ? `${(state.cryptoInfo.qber * 100).toFixed(2)}%` : 'N/A'}</span>
-              <span>Violations: {state.securityViolations.length}</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      )}
     </div>
   );
 };
 
 export default App;
+

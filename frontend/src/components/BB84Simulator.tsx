@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Play, Zap, Eye, EyeOff, AlertTriangle } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Play, AlertTriangle } from 'lucide-react';
 import type { BB84Progress, CryptoInfo, QBERDataPoint } from '../types';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 interface BB84SimulatorProps {
     progress: BB84Progress | null;
@@ -24,482 +24,354 @@ const BB84Simulator: React.FC<BB84SimulatorProps> = ({
     cryptoInfo: _cryptoInfo,
     qberHistory: qberHistoryProp
 }) => {
-    const [showDetails, setShowDetails] = useState(false);
     const [qberHistory, setQberHistory] = useState<{ time: number, qber: number }[]>([]);
+    const isCompact = useMediaQuery('(max-width: 640px)');
+    const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
 
-    // If history provided from parent, prefer it
     useEffect(() => {
         if (qberHistoryProp && qberHistoryProp.length > 0) {
             setQberHistory(qberHistoryProp.map(p => ({ time: p.timestamp, qber: p.qber * 100 })));
         }
     }, [qberHistoryProp]);
 
-    // Update QBER history when progress changes
     useEffect(() => {
         if (progress?.qber !== undefined) {
             setQberHistory(prev => {
-                const newEntry = { time: Date.now(), qber: progress.qber! * 100 };
-                const updated = [...prev, newEntry];
-                // Keep only last 50 points
-                return updated.slice(-50);
+                const updated = [...prev, { time: Date.now(), qber: progress.qber! * 100 }];
+                return updated.slice(-32);
             });
         }
     }, [progress?.qber]);
 
-    const getStageColor = (stage: string) => {
-        if (eveDetected) return 'text-red-600';
-        if (progress?.success) return 'text-green-600';
+    const stageSequence = [
+        { id: 'alice_preparation', label: 'Alice Prepares', color: 'from-cyan-400/70 via-blue-500/60 to-indigo-500/60' },
+        { id: 'transmission', label: 'Qubit Transmission', color: 'from-blue-400/60 via-purple-500/60 to-pink-500/60' },
+        { id: 'bob_measurement', label: 'Bob Measures', color: 'from-purple-400/60 via-indigo-400/60 to-blue-500/60' },
+        { id: 'sifting', label: 'Sifting', color: 'from-emerald-400/60 via-teal-500/60 to-cyan-500/60' },
+        { id: 'qber_test', label: 'QBER Test', color: 'from-amber-400/60 via-orange-500/60 to-rose-500/60' },
+        { id: 'complete', label: 'Privacy Amplification', color: 'from-emerald-500/60 via-green-500/60 to-lime-500/50' }
+    ];
 
-        switch (stage) {
-            case 'alice_preparation':
-            case 'qubit_preparation':
-                return 'text-alice';
-            case 'transmission':
-            case 'bob_measurement':
-                return 'text-bob';
-            case 'eve_attack':
-                return 'text-eve';
-            case 'sifting':
-            case 'qber_test':
-            case 'complete':
-                return 'text-quantum-600';
-            default:
-                return 'text-gray-600';
-        }
-    };
+    const canStartSimulation = userRole === 'alice' && !progress?.stage;
+    const qberPercent = (progress?.qber ?? 0) * 100;
+    const thresholdPct = (progress?.threshold ?? 0.11) * 100;
+    const visualization = useMemo(() => {
+        return Array.from({ length: 12 }, (_, index) => {
+            const aliceBasis = Math.random() > 0.5 ? '+' : '×';
+            const bobBasis = Math.random() > 0.5 ? '+' : '×';
+            const matched = aliceBasis === bobBasis;
+            const aliceBit = Math.random() > 0.5 ? 1 : 0;
+            const bobResult = matched ? aliceBit : Math.random() > 0.5 ? 1 : 0;
+            const eveIntercept = userRole === 'eve' ? Math.random() > 0.6 : Math.random() > 0.9;
+            return {
+                index,
+                aliceBit,
+                aliceBasis,
+                bobBasis,
+                bobResult,
+                matched,
+                eveIntercept
+            };
+        });
+    }, [progress?.stage, userRole]);
 
-    const getProgressBarColor = () => {
-        if (eveDetected) return 'bg-red-500';
-        if (sessionKey) return 'bg-green-500';
-        return 'bg-blue-500';
-    };
-
-    const canStartSimulation = () => {
-        return userRole === 'alice' && !progress?.stage;
-    };
-
-    // Generate visualization data for the current user's perspective
-    const getVisualizationData = () => {
-        if (!progress) return null;
-
-        // Simulate some bits for visualization
-        const sampleBits = Array.from({ length: 20 }, (_, i) => ({
-            index: i,
-            aliceBit: Math.random() > 0.5 ? 1 : 0,
-            aliceBasis: Math.random() > 0.5 ? 'X' : 'Z',
-            bobBasis: Math.random() > 0.5 ? 'X' : 'Z',
-            bobResult: Math.random() > 0.5 ? 1 : 0,
-            matched: Math.random() > 0.5,
-            eveIntercept: userRole === 'eve' && Math.random() > 0.7
-        }));
-
-        return sampleBits;
-    };
-
-    const renderQubitVisualization = () => {
-        const bits = getVisualizationData();
-        if (!bits) return null;
-
+    const particleNodes = useMemo(() => (
+        Array.from({ length: 10 }, (_, idx) => {
+            const top = 20 + Math.random() * 40;
+            const delay = idx * 0.8;
         return (
-            <div className="space-y-4">
-                <h4 className="text-sm font-medium text-gray-700">Qubit Transmission (Sample)</h4>
-                <div className="overflow-x-auto">
-                    <div className="flex space-x-1 min-w-max pb-2">
-                        {bits.map((bit, i) => (
-                            <div
-                                key={i}
-                                className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all ${bit.matched
-                                        ? 'border-green-500 bg-green-100 text-green-700'
-                                        : 'border-gray-300 bg-gray-100 text-gray-500'
-                                    } ${bit.eveIntercept ? 'ring-2 ring-red-500' : ''}`}
-                                title={`Bit ${i}: Alice(${bit.aliceBit},${bit.aliceBasis}) Bob(${bit.bobResult},${bit.bobBasis}) ${bit.matched ? '✓' : '✗'}`}
-                            >
-                                {userRole === 'alice' ? bit.aliceBit :
-                                    userRole === 'bob' ? bit.bobResult :
-                                        bit.eveIntercept ? '👁' : '?'}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div className="text-xs text-gray-500 space-y-1">
-                    <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-1">
-                            <div className="w-3 h-3 rounded-full bg-green-100 border border-green-500"></div>
-                            <span>Matching bases</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                            <div className="w-3 h-3 rounded-full bg-gray-100 border border-gray-300"></div>
-                            <span>Different bases</span>
-                        </div>
-                        {userRole === 'eve' && (
-                            <div className="flex items-center space-x-1">
-                                <div className="w-3 h-3 rounded-full border border-red-500 ring-1 ring-red-500"></div>
-                                <span>Eve intercept</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    };
+                <span
+                    key={`particle-${idx}`}
+                    style={{
+                        top: `${top}%`,
+                        animationDelay: `${delay}s`,
+                        left: `${Math.random() * 20}%`
+                    }}
+                    className={`qubit-particle ${Math.random() > 0.8 && eveDetected ? 'eve' : ''}`}
+                />
+            );
+        })
+    ), [eveDetected]);
 
-    const renderQBERChart = () => {
-        if (qberHistory.length === 0) return null;
+    const qberTrendPoints = qberHistory.slice(-15);
+    const comparisonEntries = visualization.slice(0, 8);
 
-        const threshold = (progress?.threshold || 0.11) * 100;
-
-        return (
-            <div className="space-y-2">
-                <h4 className="text-sm font-medium text-gray-700">QBER Over Time</h4>
-                <div className="h-32">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={qberHistory.map((point, i) => ({ ...point, index: i }))}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="index" hide />
-                            <YAxis domain={[0, Math.max(threshold * 1.5, Math.max(...qberHistory.map(p => p.qber)) * 1.1)]} />
-                            <Tooltip
-                                formatter={(value: number) => [`${value.toFixed(2)}%`, 'QBER']}
-                                labelFormatter={(index: number) => `Measurement ${index + 1}`}
-                            />
-                            <Line
-                                type="monotone"
-                                dataKey="qber"
-                                stroke={eveDetected ? '#ef4444' : '#3b82f6'}
-                                strokeWidth={2}
-                                dot={{ fill: eveDetected ? '#ef4444' : '#3b82f6', r: 2 }}
-                            />
-                            {/* Threshold line */}
-                            <Line
-                                type="monotone"
-                                dataKey={() => threshold}
-                                stroke="#f59e0b"
-                                strokeDasharray="5 5"
-                                strokeWidth={1}
-                                dot={false}
-                            />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
-                <div className="text-xs text-gray-500">
-                    Current QBER: {progress?.qber ? (progress.qber * 100).toFixed(2) : '0.00'}%
-                    (Threshold: {threshold.toFixed(1)}%)
-                </div>
-            </div>
-        );
-    };
-
-    return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
+    const detailedContent = (
+        <>
+            <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Quantum Key Distribution</h2>
-                    <p className="text-sm text-gray-600">
-                        {userRole === 'alice' ? 'You are the sender (Alice)' :
-                            userRole === 'bob' ? 'You are the receiver (Bob)' :
-                                'You are the eavesdropper (Eve)'}
+                    <p className="metric-label">BB84 Visualization Dashboard</p>
+                    <h2 className="text-3xl font-semibold text-[var(--text-primary)]">Quantum Channel · {userRole.toUpperCase()}</h2>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                        {userRole === 'alice' && 'Control qubit generation & start new sessions'}
+                        {userRole === 'bob' && 'Monitor incoming qubits and validate bases'}
+                        {userRole === 'eve' && 'Simulate adversarial presence on the channel'}
                     </p>
                 </div>
-
-                <div className="flex items-center space-x-2">
-                    {canStartSimulation() && (
-                        <button
-                            onClick={() => onStartBB84()}
-                            disabled={!!progress?.stage}
-                            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            <Play className="w-4 h-4" />
-                            <span>Start BB84</span>
-                        </button>
-                    )}
-
+                {canStartSimulation && (
                     <button
-                        onClick={() => setShowDetails(!showDetails)}
-                        className="flex items-center space-x-2 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+                        onClick={() => onStartBB84()}
+                        className="quantum-button bg-gradient-to-r from-cyan-500 to-blue-500 text-white flex items-center gap-2"
                     >
-                        {showDetails ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        <span>{showDetails ? 'Hide' : 'Show'} Details</span>
+                        <Play className="w-4 h-4" />
+                        Start BB84
                     </button>
-                </div>
-            </div>
+                )}
+            </header>
 
-            {/* Progress Bar */}
-            {progress && (
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className={`font-medium ${getStageColor(progress.stage)}`}>
-                            {progress.message || `Stage: ${progress.stage}`}
-                        </span>
-                        <span className="text-gray-600">
-                            {Math.round((progress.progress || 0) * 100)}%
-                        </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div
-                            className={`h-3 rounded-full transition-all duration-500 ${getProgressBarColor()}`}
-                            style={{ width: `${(progress.progress || 0) * 100}%` }}
-                        />
+            {eveDetected && (
+                <div className="mt-6 rounded-2xl border border-rose-400/30 bg-gradient-to-r from-rose-900/50 to-orange-900/30 p-4 flex items-center gap-3">
+                    <AlertTriangle className="text-rose-200" />
+                    <div>
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">Eavesdropping detected via QBER spike</p>
+                        <p className="text-xs text-rose-200">Take immediate action: pause comms or re-run BB84.</p>
                     </div>
                 </div>
             )}
 
-            {/* Eve Detection Alert */}
-            {eveDetected && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex items-center space-x-2">
-                        <AlertTriangle className="w-5 h-5 text-red-600 eve-detected" />
+            <div className="mt-8 grid xl:grid-cols-[1.8fr,1fr] gap-6">
+                <div className="space-y-6">
+                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 space-y-4">
+                        <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+                            <span>Alice • Bits & Bases</span>
+                            <span>Bob • Measurements</span>
+                        </div>
+
+                        <div className="space-y-3">
+                            {['alice', 'bob'].map((actor) => (
+                                <div key={actor} className="flex items-center gap-3">
+                                    <span className={`session-chip ${actor}`}>{actor === 'alice' ? 'Alice' : 'Bob'}</span>
+                                    <div className="flex-1 flex gap-2 overflow-x-auto">
+                                        {visualization.map((bit) => (
+                                            <div
+                                                key={`${actor}-${bit.index}`}
+                                                className={`bit-grid-cell ${bit.matched ? 'match' : ''} w-11 h-14 rounded-2xl border flex flex-col items-center justify-center text-xs font-mono ${
+                                                    bit.eveIntercept && actor === 'alice' ? 'ring-2 ring-rose-400/60' : ''
+                                                }`}
+                                            >
+                                                <span className="text-base font-semibold">
+                                                    {actor === 'alice' ? bit.aliceBit : bit.bobResult}
+                                                </span>
+                                                <span className="text-[10px] bit-grid-cell__basis">
+                                                    {actor === 'alice' ? bit.aliceBasis : bit.bobBasis}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="qubit-stream">
+                        {particleNodes}
+                        <div className="relative z-10 flex items-center justify-between px-6 py-4 text-sm text-[var(--text-primary)]">
+                            <span>Qubits in flight</span>
+                            <span className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-cyan-300 animate-pulse" />
+                                Pulsing = active transmission
+                            </span>
+                    </div>
+                </div>
+
+                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 grid md:grid-cols-2 gap-4">
                         <div>
-                            <h3 className="text-sm font-medium text-red-800">Eavesdropping Detected!</h3>
-                            <p className="text-sm text-red-700">
-                                High quantum bit error rate indicates potential security breach. Session compromised.
+                            <p className="metric-label">Stage</p>
+                            <p className="text-2xl font-semibold text-[var(--text-primary)]">
+                                {progress?.message || progress?.stage?.replace('_', ' ').toUpperCase() || 'Idle'}
                             </p>
+                            <div className="mt-3 h-2 rounded-full bg-[var(--panel-muted)]">
+                                <div
+                                    className={`h-full rounded-full ${eveDetected ? 'bg-gradient-to-r from-amber-500 to-rose-500' : 'bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500'}`}
+                                    style={{ width: `${Math.round((progress?.progress ?? 0) * 100)}%` }}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <p className="metric-label mb-2">Live Comparison</p>
+                            <div className="rounded-2xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-3 flex flex-col gap-3">
+                                <div className="grid grid-cols-[56px,1fr,70px] text-xs text-[var(--table-header)]">
+                                    <span>Bit</span>
+                                    <span>Alice vs Bob</span>
+                                    <span className="text-right pr-2">Match</span>
+                                </div>
+                                <div className="space-y-1">
+                                    {comparisonEntries.map((bit) => (
+                                        <div
+                                            key={`row-${bit.index}`}
+                                            className="grid grid-cols-[56px,1fr,70px] text-sm text-[var(--text-primary)] items-center py-0.5 rounded-md bg-[var(--table-row)]"
+                                        >
+                                            <span className="font-mono pl-1">{bit.index.toString().padStart(2, '0')}</span>
+                                            <span className="font-mono">{bit.aliceBit}/{bit.bobResult} ({bit.aliceBasis}/{bit.bobBasis})</span>
+                                            <span className={`text-right pr-2 ${bit.matched ? 'text-emerald-500' : 'text-slate-500'}`}>
+                                                {bit.matched ? '✓' : '×'}
+                                        </span>
+                                    </div>
+                                    ))}
+                                    <p className="text-[11px] text-[var(--table-header)] mt-1 pl-1">Showing last {comparisonEntries.length} bits</p>
+                                    </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            )}
 
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left Panel - Status & Stats */}
-                <div className="space-y-4">
-                    {/* Current Status Card */}
-                    <div className="bg-white border rounded-lg p-4">
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">Current Status</h3>
-
-                        {!progress ? (
-                            <div className="text-center py-8">
-                                <Zap className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                                <p className="text-gray-600">
-                                    {userRole === 'alice'
-                                        ? 'Ready to start BB84 key generation'
-                                        : 'Waiting for Alice to start BB84 protocol'
-                                    }
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm text-gray-600">Stage:</span>
-                                    <span className={`text-sm font-medium ${getStageColor(progress.stage)}`}>
-                                        {progress.stage.replace('_', ' ').toUpperCase()}
-                                    </span>
-                                </div>
-
-                                {progress.qber !== undefined && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-600">QBER:</span>
-                                        <span className={`text-sm font-medium ${progress.qber > (progress.threshold || 0.11) ? 'text-red-600' : 'text-green-600'
-                                            }`}>
-                                            {(progress.qber * 100).toFixed(2)}%
-                                        </span>
-                                    </div>
-                                )}
-
-                                {progress.sifted_length !== undefined && progress.original_length !== undefined && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-600">Sifted Key:</span>
-                                        <span className="text-sm font-medium text-blue-600">
-                                            {progress.sifted_length}/{progress.original_length} bits
-                                        </span>
-                                    </div>
-                                )}
-
-                                {userRole !== 'eve' && progress.final_key_length && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-600">Final Key:</span>
-                                        <span className="text-sm font-medium text-green-600">
-                                            {progress.final_key_length} bytes
-                                        </span>
-                                    </div>
-                                )}
-                                {userRole === 'eve' && progress?.stage === 'complete' && (
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-gray-600">Eve's Knowledge:</span>
-                                        <span className="text-sm font-medium text-gray-600">No access to final key</span>
-                                    </div>
-                                )}
-                            </div>
+                <div className="space-y-6">
+                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 flex flex-col items-center gap-4">
+                        <div
+                            className="qber-ring"
+                            style={{ // @ts-ignore custom property
+                                '--qber-angle': `${Math.min(100, qberPercent)}%`
+                            }}
+                        >
+                            <strong>{qberPercent.toFixed(2)}%</strong>
+                        </div>
+                        <p className="text-sm text-[var(--text-secondary)] text-center">
+                            Live QBER · Threshold {thresholdPct.toFixed(1)}%
+                        </p>
+                        {qberPercent > thresholdPct && (
+                            <span className="text-xs text-rose-200">Warning: error rate beyond safe envelope</span>
                         )}
                     </div>
 
-                    {/* Session Key Status */}
-                    <div className="bg-white border rounded-lg p-4">
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">{userRole === 'eve' ? "Eve's Guesses" : 'Session Key'}</h3>
-
-                        {userRole === 'eve' ? (
+                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 space-y-4">
+                        <p className="metric-label">Channel Health</p>
                             <div className="space-y-2">
-                                <div className="flex items-center space-x-2">
-                                    <div className={`w-3 h-3 rounded-full ${eveDetected ? 'bg-red-500' : 'bg-gray-300'}`}></div>
-                                    <span className={`text-sm font-medium ${eveDetected ? 'text-red-700' : 'text-gray-700'}`}>
-                                        {eveDetected ? 'Eavesdropping detected via QBER' : 'Stealthy — limited information'}
+                            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+                                <span>Sifted Bits</span>
+                                <span className="font-semibold text-[var(--text-primary)]">
+                                    {progress?.sifted_length ?? 0}/{progress?.original_length ?? 0}
                                     </span>
                                 </div>
-                                <p className="text-xs text-gray-600">
-                                    Eve cannot obtain the final secret key. At best, she forms noisy guesses before privacy amplification.
-                                </p>
-                                {progress?.sifted_length !== undefined && (
-                                    <div className="text-xs text-gray-600">
-                                        <div>Visible public info: bases and sample test bits</div>
-                                        <div>Guess reliability: low (QBER {(progress.qber ?? 0) * 100}% )</div>
-                                    </div>
-                                )}
+                            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+                                <span>Final key</span>
+                                <span className="font-semibold text-emerald-500">{progress?.final_key_length ?? '--'} bytes</span>
                             </div>
-                        ) : (
-                            sessionKey ? (
-                                <div className="space-y-3">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                                        <span className="text-sm font-medium text-green-700">Key Established</span>
-                                    </div>
-                                    <div className="text-xs text-gray-600">
-                                        <div>Length: {sessionKey.length} bytes</div>
-                                        <div className="font-mono bg-gray-100 p-2 rounded mt-2">
-                                            {Array.from(sessionKey.slice(0, 8)).map(b =>
-                                                b.toString(16).padStart(2, '0')
-                                            ).join(' ')}...
+                            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
+                                <span>Session key</span>
+                                <span className="font-semibold text-[var(--text-primary)]">
+                                    {sessionKey ? `${sessionKey.length * 8} bits ready` : 'Awaiting'}
+                                </span>
                                         </div>
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="text-center py-4">
-                                    <div className="w-3 h-3 rounded-full bg-gray-300 mx-auto mb-2"></div>
-                                    <span className="text-sm text-gray-600 mb-3 block">No session key available</span>
-                                    {progress?.success && onRetrySessionKey && (
+                        {!sessionKey && progress?.success && onRetrySessionKey && (
                                         <button
+                                className="quantum-button bg-[var(--panel-muted)] border border-[var(--surface-border)] text-[var(--text-primary)] w-full"
                                             onClick={onRetrySessionKey}
-                                            className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                                         >
-                                            Retry Key Retrieval
+                                Retry key retrieval
                                         </button>
-                                    )}
-                                </div>
-                            )
                         )}
                     </div>
-                </div>
 
-                {/* Right Panel - Visualizations */}
-                <div className="space-y-4">
-                    {/* Qubit Visualization */}
-                    <div className="bg-white border rounded-lg p-4">
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">Quantum Transmission</h3>
-                        {renderQubitVisualization()}
+                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 space-y-4">
+                        <p className="metric-label">Stage Timeline</p>
+                        <div className="space-y-3">
+                            {stageSequence.map((stage, idx) => {
+                                const active = progress?.stage === stage.id;
+                                const completed = stageSequence.findIndex(s => s.id === progress?.stage) > idx;
+                                return (
+                                    <div key={stage.id} className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${stage.color} flex items-center justify-center text-sm text-white`}>
+                                            {idx + 1}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-[var(--text-primary)] font-medium">{stage.label}</p>
+                                            <div className="h-1 rounded-full bg-[var(--panel-muted)] mt-2">
+                                                <div
+                                                    className={`h-full rounded-full ${completed || active ? 'bg-gradient-to-r from-emerald-400 to-cyan-500' : 'bg-[var(--panel-muted)]'} ${active ? 'animate-pulse' : ''}`}
+                                                    style={{ width: `${completed ? 100 : active ? Math.max(8, (progress?.progress ?? 0) * 100) : 8}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                </div>
                     </div>
 
-                    {/* QBER Chart */}
-                    {qberHistory.length > 0 && (
-                        <div className="bg-white border rounded-lg p-4">
-                            {renderQBERChart()}
+                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 space-y-3">
+                        <p className="metric-label">QBER Trend</p>
+                        <div className="h-24">
+                            <svg width="100%" height="100%" viewBox="0 0 200 100">
+                                <polyline
+                                    fill="none"
+                                    stroke={eveDetected ? '#f87171' : '#38bdf8'}
+                                    strokeWidth="2"
+                                    points={qberTrendPoints.map((point, index) => {
+                                        const x = (index / (qberTrendPoints.length - 1 || 1)) * 200;
+                                        const y = 100 - Math.min(100, point.qber);
+                                        return `${x},${y}`;
+                                    }).join(' ')}
+                                />
+                                <line
+                                    x1="0"
+                                    y1={100 - thresholdPct}
+                                    x2="200"
+                                    y2={100 - thresholdPct}
+                                    stroke="#fbbf24"
+                                    strokeDasharray="4 4"
+                                    strokeWidth="1"
+                                />
+                            </svg>
                         </div>
-                    )}
+                        <div className="flex justify-between text-xs text-[var(--table-header)]">
+                            <span>Recent</span>
+                            <span>{qberTrendPoints.length} samples</span>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </>
+    );
 
-            {/* Detailed Information (Collapsible) */}
-            {showDetails && (
-                <div className="bg-gray-50 border rounded-lg p-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">BB84 Protocol Details</h3>
+    if (isCompact) {
+        const totalBits = progress?.original_length ?? 0;
+        const matchedBits = progress?.sifted_length ?? 0;
+        const qberDisplay = progress?.qber ? `${(progress.qber * 100).toFixed(2)}%` : '—';
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Protocol Steps */}
-                        <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-3">Protocol Steps</h4>
-                            <div className="space-y-2 text-sm">
-                                <div className={`flex items-center space-x-2 ${progress?.stage === 'alice_preparation' ? 'text-blue-600 font-medium' : 'text-gray-600'
-                                    }`}>
-                                    <div className={`w-2 h-2 rounded-full ${progress?.stage === 'alice_preparation' ? 'bg-blue-600' : 'bg-gray-300'
-                                        }`}></div>
-                                    <span>1. Alice prepares random qubits</span>
-                                </div>
-                                <div className={`flex items-center space-x-2 ${progress?.stage === 'transmission' ? 'text-blue-600 font-medium' : 'text-gray-600'
-                                    }`}>
-                                    <div className={`w-2 h-2 rounded-full ${progress?.stage === 'transmission' ? 'bg-blue-600' : 'bg-gray-300'
-                                        }`}></div>
-                                    <span>2. Qubits transmitted to Bob</span>
-                                </div>
-                                <div className={`flex items-center space-x-2 ${progress?.stage === 'bob_measurement' ? 'text-blue-600 font-medium' : 'text-gray-600'
-                                    }`}>
-                                    <div className={`w-2 h-2 rounded-full ${progress?.stage === 'bob_measurement' ? 'bg-blue-600' : 'bg-gray-300'
-                                        }`}></div>
-                                    <span>3. Bob measures in random bases</span>
-                                </div>
-                                <div className={`flex items-center space-x-2 ${progress?.stage === 'sifting' ? 'text-blue-600 font-medium' : 'text-gray-600'
-                                    }`}>
-                                    <div className={`w-2 h-2 rounded-full ${progress?.stage === 'sifting' ? 'bg-blue-600' : 'bg-gray-300'
-                                        }`}></div>
-                                    <span>4. Sifting: Compare bases publicly</span>
-                                </div>
-                                <div className={`flex items-center space-x-2 ${progress?.stage === 'qber_test' ? 'text-blue-600 font-medium' : 'text-gray-600'
-                                    }`}>
-                                    <div className={`w-2 h-2 rounded-full ${progress?.stage === 'qber_test' ? 'bg-blue-600' : 'bg-gray-300'
-                                        }`}></div>
-                                    <span>5. Test subset for QBER</span>
-                                </div>
-                                <div className={`flex items-center space-x-2 ${progress?.stage === 'complete' ? 'text-green-600 font-medium' : 'text-gray-600'
-                                    }`}>
-                                    <div className={`w-2 h-2 rounded-full ${progress?.stage === 'complete' ? 'bg-green-600' : 'bg-gray-300'
-                                        }`}></div>
-                                    <span>6. Privacy amplification</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Your Role Information */}
-                        <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-3">Your Role: {userRole.charAt(0).toUpperCase() + userRole.slice(1)}</h4>
-                            <div className="text-sm text-gray-600 space-y-2">
-                                {userRole === 'alice' && (
-                                    <>
-                                        <p>• Generate random bits and bases</p>
-                                        <p>• Prepare qubits in chosen states</p>
-                                        <p>• Send qubits to Bob</p>
-                                        <p>• Compare bases publicly for sifting</p>
-                                        <p>• Reveal test bits for QBER calculation</p>
-                                    </>
-                                )}
-                                {userRole === 'bob' && (
-                                    <>
-                                        <p>• Choose random measurement bases</p>
-                                        <p>• Measure received qubits</p>
-                                        <p>• Compare bases with Alice for sifting</p>
-                                        <p>• Reveal test bits for QBER calculation</p>
-                                        <p>• Generate shared secret key</p>
-                                    </>
-                                )}
-                                {userRole === 'eve' && (
-                                    <>
-                                        <p>• Intercept qubits between Alice and Bob</p>
-                                        <p>• Measure in chosen bases (introduces errors)</p>
-                                        <p>• Re-send qubits to Bob</p>
-                                        <p>• Your presence increases QBER</p>
-                                        <p>• Detection occurs when QBER &gt; threshold</p>
-                                    </>
-                                )}
-                            </div>
-                        </div>
+        return (
+            <section className="glass-card glow-border space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="metric-label">Quantum Flow</p>
+                        <h2 className="text-xl font-semibold text-[var(--text-primary)]">BB84 Overview</h2>
                     </div>
+                    <button
+                        onClick={() => setMobileDetailsOpen(prev => !prev)}
+                        className="copy-button"
+                    >
+                        {mobileDetailsOpen ? 'Hide Details' : 'View Details'}
+                    </button>
+                </div>
 
-                    {/* Security Information */}
-                    <div className="mt-6 pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Security Properties</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-600">
-                            <div>
-                                <div className="font-medium mb-1">Information-theoretic security</div>
-                                <div>Security based on quantum mechanics, not computational assumptions</div>
-                            </div>
-                            <div>
-                                <div className="font-medium mb-1">Eavesdropping detection</div>
-                                <div>Any measurement by Eve disturbs quantum states, increasing error rate</div>
-                            </div>
-                            <div>
-                                <div className="font-medium mb-1">Perfect forward secrecy</div>
-                                <div>Each session generates a unique ephemeral key</div>
-                            </div>
-                        </div>
+                <div className="grid grid-cols-2 gap-4 text-sm text-[var(--text-secondary)]">
+                    <div>
+                        <p className="metric-label">Total Bits</p>
+                        <p className="metric-value text-[var(--text-primary)]">{totalBits}</p>
+                    </div>
+                    <div>
+                        <p className="metric-label">Matched Bases</p>
+                        <p className="metric-value text-[var(--text-primary)]">{matchedBits}</p>
+                    </div>
+                    <div>
+                        <p className="metric-label">QBER</p>
+                        <p className="metric-value text-[var(--text-primary)]">{qberDisplay}</p>
+                    </div>
+                    <div>
+                        <p className="metric-label">Stage</p>
+                        <p className="metric-value text-[var(--text-primary)]">{progress?.stage?.replace('_', ' ') ?? 'Idle'}</p>
                     </div>
                 </div>
-            )}
-        </div>
+
+                {mobileDetailsOpen && detailedContent}
+            </section>
+        );
+    }
+
+    return (
+        <section className="glass-card glow-border">
+            {detailedContent}
+        </section>
     );
 };
 

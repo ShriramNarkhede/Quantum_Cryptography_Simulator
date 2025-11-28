@@ -23,7 +23,6 @@ interface ChatInterfaceProps {
   onDecryptMessage?: (messageId: string) => void; // optional: hook for external decryption flow
   onFileUpload?: (file: File) => void; // optional: delegate file uploads to parent
   onFileDownload?: (messageId: string, encrypted: boolean) => void; // optional: delegate file downloads to parent
-  onEnsureSessionKeyReady?: () => Promise<boolean>; // optional: ensure session key is ready
   currentUser: User | null;
   sessionKey: Uint8Array | null;
   sessionId?: string; // session ID for API calls
@@ -37,7 +36,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onDecryptMessage,
   onFileUpload,
   onFileDownload,
-  onEnsureSessionKeyReady,
   currentUser,
   sessionKey,
   sessionId,
@@ -56,7 +54,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [encryptProgress, setEncryptProgress] = useState<number>(0);
-  const [isEncrypting, setIsEncrypting] = useState<boolean>(false);
   const [showEncryption, setShowEncryption] = useState(false);
   const [showKeyConfirmDialog, setShowKeyConfirmDialog] = useState<{
     mode: 'encrypt' | 'decrypt' | null;
@@ -116,14 +113,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     return new Date(timestamp).toLocaleTimeString();
   };
 
-  const getRoleColor = (senderId: string): string => {
-    if (senderId === 'system') return 'text-gray-600';
-    if (senderId === currentUser?.user_id) return 'text-blue-600';
-    
-    // Determine color based on message position/context
-    return 'text-green-600'; // Assume other party
-  };
-
   const getRoleName = (senderId: string): string => {
     if (senderId === 'system') return 'System';
     if (senderId === currentUser?.user_id) return 'You';
@@ -155,105 +144,96 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const encryptionStatus = getEncryptionStatus();
 
   return (
-    <div className="bg-white border rounded-lg shadow-sm flex flex-col h-[600px]">
-      {/* Header */}
-      <div className="p-4 border-b bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <MessageCircle className="w-5 h-5 text-gray-600" />
-            <h3 className="text-lg font-medium text-gray-900">Secure Chat</h3>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <div className={`flex items-center space-x-1 ${encryptionStatus.color}`}>
-              {encryptionStatus.icon}
-              <span className="text-sm font-medium">{encryptionStatus.text}</span>
+    <div className="glass-card glow-border flex flex-col h-[620px] relative overflow-hidden">
+      <div className="absolute inset-0 opacity-30 pointer-events-none" aria-hidden="true">
+        <div className="quantum-particles" />
+      </div>
+      <div className="relative flex-1 flex flex-col">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <MessageCircle className="w-5 h-5 text-cyan-300" />
+            <div>
+              <h3 className="text-lg font-semibold text-white">Secure Chat Tunnel</h3>
+              <p className="text-xs text-slate-300">End-to-end OTP with quantum key refresh</p>
             </div>
-            
+          </div>
+          <div className="flex items-center gap-3">
+            <div className={`session-chip ${disabled ? 'eve' : 'alice'}`}>
+              {encryptionStatus.icon}
+              <span className="text-xs">{encryptionStatus.text}</span>
+            </div>
             <button
               onClick={() => setShowEncryption(!showEncryption)}
-              className="text-gray-400 hover:text-gray-600"
-              title="Toggle encryption details"
+              className="copy-button"
+              title="Encryption details"
             >
               <AlertCircle className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Encryption Details */}
         {showEncryption && (
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <div className="text-xs text-gray-600 space-y-1">
-              <div>Encryption: {sessionKey ? 'One-Time Pad (OTP)' : 'None'}</div>
-              <div>Key Length: {sessionKey ? `${sessionKey.length * 8} bits` : 'N/A'}</div>
-              <div>Security: {sessionKey ? 'Information-theoretically secure' : 'Unencrypted'}</div>
-            </div>
+          <div className="mt-4 rounded-2xl bg-black/30 border border-white/10 p-3 text-xs text-slate-200 space-y-1">
+            <div>Algorithm: OTP + AES-256-GCM transport</div>
+            <div>Key length: {sessionKey ? `${sessionKey.length * 8} bits` : '—'}</div>
+            <div>Status: {sessionKey ? 'Information-theoretically secure' : 'Awaiting key'}</div>
           </div>
         )}
-      </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p>No messages yet</p>
-            <p className="text-sm">{sessionKey ? 'Start chatting securely!' : 'Generate a session key first'}</p>
-          </div>
-        ) : (
-          messages.map((message, index) => (
-            <div
-              key={`${message.message_id}-${index}-${message.timestamp}`}
-              className={`flex ${message.type === 'sent' ? 'justify-end' : 
-                         message.type === 'system' ? 'justify-center' : 'justify-start'}`}
-            >
-              {message.type === 'system' ? (
-                <div className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm">
-                  {message.content}
-                </div>
-              ) : (
-                <div className={`max-w-xs lg:max-w-md ${
-                  message.type === 'sent' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
-                } rounded-lg p-3`}>
-                  <div className="flex items-start justify-between mb-1">
-                    <span className={`text-xs font-medium ${
-                      message.type === 'sent' ? 'text-blue-100' : getRoleColor(message.sender_id)
-                    }`}>
-                      {getRoleName(message.sender_id)}
-                    </span>
-                    <span className={`text-xs ml-2 ${
-                      message.type === 'sent' ? 'text-blue-100' : 'text-gray-500'
-                    }`}>
-                      {formatTimestamp(message.timestamp)}
-                    </span>
-                  </div>
-                  
-                  <div className="text-sm">
-                    {message.file_info ? (
-                      <div className="p-3 bg-gray-50 rounded border">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Upload className="w-4 h-4 text-gray-600" />
-                          <div className="flex-1">
-                            <div className="font-medium text-sm">{message.file_info.filename}</div>
-                            <div className="text-xs text-gray-500">
-                              {(message.file_info.file_size / 1024).toFixed(1)} KB
-                              {message.file_info.encrypted && ' • Encrypted'}
+        <div className="flex-1 mt-4 overflow-y-auto space-y-4 pr-2">
+          {messages.length === 0 ? (
+            <div className="text-center text-slate-300 py-12">
+              <MessageCircle className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <p>No transmissions yet</p>
+              <p className="text-xs text-slate-500">{sessionKey ? 'Channel ready' : 'Generate key to begin'}</p>
+            </div>
+          ) : (
+            messages.map((message, index) => {
+              const isSystem = message.type === 'system';
+              const isSender = message.type === 'sent';
+              const roleClass = (() => {
+                if (isSystem) return '';
+                if (isSender) {
+                  if (currentUser?.role === 'alice') return 'alice';
+                  if (currentUser?.role === 'bob') return 'bob';
+                  return 'eve';
+                }
+                return currentUser?.role === 'alice' ? 'bob' : 'alice';
+              })();
+
+              return (
+                <div
+                  key={`${message.message_id}-${index}`}
+                  className={`flex ${isSystem ? 'justify-center' : isSender ? 'justify-end' : 'justify-start'}`}
+                >
+                  {isSystem ? (
+                    <div className="session-chip">{message.content}</div>
+                  ) : (
+                    <div className={`secure-message ${roleClass}`}>
+                      <div className="flex items-center justify-between mb-2 text-xs text-slate-200 gap-3">
+                        <span className="font-semibold tracking-wide">
+                          {getRoleName(message.sender_id)}
+                        </span>
+                        <span className="text-slate-400">{formatTimestamp(message.timestamp)}</span>
+                      </div>
+                      <div className="text-sm leading-relaxed">
+                        {message.file_info ? (
+                          <div className="rounded-2xl bg-black/40 border border-white/10 p-3 space-y-2">
+                            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-300">
+                              <Upload className="w-4 h-4" />
+                              <span>Secure File</span>
                             </div>
-                          </div>
-                        </div>
-                        
-                        {message.file_info.encrypted && (
-                          <div className="space-y-2">
-                            <div className="flex items-center space-x-1 text-xs text-gray-500">
-                              <Lock className="w-3 h-3" />
-                              <span>Encrypted file</span>
-                            </div>
+                            <p className="text-white text-sm font-medium">{message.file_info.filename}</p>
+                            <p className="text-xs text-slate-400">
+                              {(message.file_info.file_size / 1024).toFixed(1)} KB • AES-256-GCM
+                            </p>
                             <div className="flex flex-wrap gap-2">
                               {onDecryptMessage && message.type === 'received' && currentUser?.role !== 'eve' && (
                                 <button
                                   onClick={() => onDecryptMessage(message.message_id)}
-                                  className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                  className="session-chip alice text-xs"
                                 >
+                                  <Lock className="w-3 h-3" />
                                   Decrypt
                                 </button>
                               )}
@@ -262,167 +242,130 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                   <button
                                     onClick={() => {
                                       if (!sessionKey) {
-                                        console.error('No session key available for decryption. Please complete the BB84 key generation first.');
+                                        console.error('No session key available for decryption.');
                                         return;
                                       }
                                       setShowKeyConfirmDialog({ mode: 'decrypt', messageId: message.message_id });
                                     }}
-                                    className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 flex items-center space-x-1"
-                                    title="Download decrypted file"
+                                    className="session-chip bob text-xs"
                                   >
-                                    <Download className="w-3 h-3" />
-                                    <span>Download Decrypted</span>
+                                    <Download className="w-3 h-3" /> Download
                                   </button>
                                   {onFileDownload && (
                                     <button
                                       onClick={() => onFileDownload(message.message_id, true)}
-                                      className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex items-center space-x-1"
-                                      title="Download encrypted file"
+                                      className="session-chip eve text-xs"
                                     >
                                       <Lock className="w-3 h-3" />
-                                      <Download className="w-3 h-3" />
-                                      <span>Download Encrypted</span>
+                                      Raw
                                     </button>
                                   )}
                                 </>
                               )}
                             </div>
                           </div>
+                        ) : (
+                          <>
+                            <p>{message.content || getEncryptedPreview(message.encrypted_content)}</p>
+                            {message.encrypted_content && !message.content && onDecryptMessage && message.type === 'received' && currentUser?.role !== 'eve' && (
+                              <button
+                                onClick={() => onDecryptMessage(message.message_id)}
+                                className="session-chip alice text-xs mt-2"
+                              >
+                                <Lock className="w-3 h-3" />
+                                Decrypt
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
-                    ) : (
-                      message.content || (message.encrypted_content ? getEncryptedPreview(message.encrypted_content) : '[No content]')
-                    )}
-                  </div>
-
-                  {/* Encryption indicator */}
-                  {message.encrypted_content && (
-                    <div className="flex items-center justify-between mt-2">
-                      <div className={`flex items-center space-x-1 ${
-                        message.type === 'sent' ? 'text-blue-200' : 'text-gray-500'
-                      }`}>
-                        <Lock className="w-3 h-3" />
-                        <span className="text-xs">Encrypted</span>
-                      </div>
-                      {onDecryptMessage && message.type === 'received' && currentUser?.role !== 'eve' && (
-                        <button
-                          onClick={() => onDecryptMessage(message.message_id)}
-                          className="text-blue-600 hover:text-blue-800 text-xs"
-                        >
-                          Decrypt
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input Area */}
-      <div className="p-4 border-t bg-gray-50">
-        {/* File Upload Section */}
-        {selectedFile && (
-          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Upload className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-blue-800">
-                  {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
-                </span>
-              </div>
-              <div className="flex items-center space-x-3">
-                {isEncrypting && (
-                  <div className="text-xs text-blue-800">
-                    Encrypting… {Math.round(encryptProgress * 100)}%
-                  </div>
-                )}
-                <button
-                  onClick={handleFileUpload}
-                  disabled={disabled}
-                  className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Send
-                </button>
-                <button
-                  onClick={() => setSelectedFile(null)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-            {isEncrypting && (
-              <div className="mt-2 w-full bg-blue-100 rounded h-2">
-                <div className="h-2 bg-blue-600 rounded" style={{ width: `${Math.round(encryptProgress * 100)}%` }} />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Message Input */}
-        <div className="flex items-end space-x-2">
-          <div className="flex-1">
-            <textarea
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={disabled ? 
-                'Cannot send messages (no key or channel compromised)' : 
-                'Type a message...'
-              }
-              disabled={disabled}
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          {/* File Upload Button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
-            className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Upload file"
-          >
-            <Upload className="w-5 h-5" />
-          </button>
-
-          {/* Send Button */}
-          <button
-            onClick={handleSendMessage}
-            disabled={disabled || !newMessage.trim()}
-            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Send message"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Status Text */}
-        <div className="mt-2 text-xs text-gray-500">
-          {disabled ? (
-            <span className="text-red-600">
-              {!sessionKey ? 'No encryption key available' : 'Channel may be compromised by Eve'}
-            </span>
-          ) : (
-            <span>
-              Messages are encrypted with quantum-generated key • Press Enter to send
-            </span>
+              );
+            })
           )}
+          <div ref={messagesEndRef} />
         </div>
 
-        {/* Hidden File Input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          onChange={handleFileSelect}
-          className="hidden"
-          accept="*/*"
-        />
+        {selectedFile && (
+          <div className="mt-4 rounded-2xl bg-cyan-500/10 border border-cyan-300/30 p-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-cyan-100">{selectedFile.name}</span>
+              <span className="text-slate-300">{(selectedFile.size / 1024).toFixed(1)} KB</span>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500"
+                style={{ width: `${Math.round((encryptProgress || 0) * 100)}%` }}
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-end gap-3 text-xs text-slate-300">
+              <button onClick={() => setSelectedFile(null)}>Cancel</button>
+              <button
+                className="session-chip alice"
+                disabled={disabled}
+                onClick={handleFileUpload}
+              >
+                <Upload className="w-4 h-4" />
+                Encrypt & Send
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-auto pt-4">
+          <div className="flex items-end gap-3">
+            <div className="flex-1 rounded-2xl bg-black/40 border border-white/10 px-4 py-3">
+              <textarea
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder={disabled ? 'Channel unavailable' : 'Compose quantum-secure message…'}
+                disabled={disabled}
+                rows={2}
+                className="w-full bg-transparent text-white placeholder:text-slate-500 focus:outline-none resize-none"
+              />
+            </div>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="quantum-button bg-white/10 border border-white/20 text-white"
+              disabled={disabled}
+            >
+              <Upload className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleSendMessage}
+              disabled={disabled || !newMessage.trim()}
+              className="quantum-button bg-gradient-to-r from-cyan-500 to-blue-500 text-white flex items-center gap-2 disabled:opacity-50"
+            >
+              <Send className="w-4 h-4" />
+              Send
+            </button>
+          </div>
+          {newMessage && !disabled && (
+            <div className="typing-indicator mt-2 text-xs text-slate-300 flex items-center gap-2">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span className="ml-2 text-slate-300">Encrypting…</span>
+            </div>
+          )}
+          <p className="mt-3 text-[11px] text-slate-400">
+            {disabled
+              ? (!sessionKey ? 'No quantum key available' : 'Channel paused due to high QBER')
+              : 'Press Enter to transmit with OTP sealing'}
+          </p>
+        </div>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        onChange={handleFileSelect}
+        className="hidden"
+        accept="*/*"
+      />
 
       {/* Key Confirmation Dialog */}
       {showKeyConfirmDialog.mode && (
@@ -450,7 +393,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   if (showKeyConfirmDialog.mode === 'encrypt' && selectedFile) {
                     try {
                       // New flow: send plaintext to backend; backend handles encryption.
-                      setIsEncrypting(true);
                       setEncryptProgress(0);
 
                       if (onFileUpload) {
@@ -463,16 +405,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       // Reset UI state
                       setSelectedFile(null);
                       setShowKeyConfirmDialog({ mode: null });
-                      setIsEncrypting(false);
                       setEncryptProgress(0);
                       if (fileInputRef.current) fileInputRef.current.value = '';
                     } catch (e) {
                       console.error('File send failed:', e);
-                      setIsEncrypting(false);
                     }
                   } else if (showKeyConfirmDialog.mode === 'decrypt' && showKeyConfirmDialog.messageId) {
                     try {
-                      setIsEncrypting(true);
                       setEncryptProgress(0);
                       
                       // Fetch encrypted file from server
@@ -509,7 +448,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       URL.revokeObjectURL(url);
                       
                       setShowKeyConfirmDialog({ mode: null });
-                      setIsEncrypting(false);
                       setEncryptProgress(0);
                     } catch (e) {
                       console.error('File download error:', e);
@@ -528,7 +466,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       }
                       
                       console.error(errorMessage);
-                      setIsEncrypting(false);
                     }
                   }
                 }}
@@ -545,3 +482,4 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 };
 
 export default ChatInterface;
+

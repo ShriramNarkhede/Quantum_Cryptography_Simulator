@@ -9,6 +9,9 @@ __pycache__/
 env/
 ENV/
 
+
+./backend/app/main.py
+
 # Node.js
 node_modules/
 npm-debug.log*

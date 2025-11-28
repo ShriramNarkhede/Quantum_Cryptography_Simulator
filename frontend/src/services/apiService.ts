@@ -29,6 +29,12 @@ class ApiService {
       },
     });
 
+    // Restore token from localStorage if present
+    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (storedToken) {
+      this.setAuthToken(storedToken);
+    }
+
     this.setupInterceptors();
   }
 
@@ -323,10 +329,20 @@ class ApiService {
 
   setAuthToken(token: string): void {
     this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('auth_token', token);
+      }
+    } catch {}
   }
 
   removeAuthToken(): void {
     delete this.api.defaults.headers.common['Authorization'];
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+      }
+    } catch {}
   }
 
   // Request statistics
@@ -343,6 +359,20 @@ class ApiService {
   }
 
   // Crypto-specific API endpoints
+  async login(username: string, password: string): Promise<{ access_token: string; token_type: string; expires_in: number }> {
+    const res = await this.api.post('/auth/login', { username, password });
+    const token = res.data?.access_token;
+    if (token) this.setAuthToken(token);
+    return res.data;
+  }
+
+  async signup(username: string, password: string): Promise<{ access_token: string; token_type: string; expires_in: number }> {
+    const res = await this.api.post('/auth/signup', { username, password });
+    const token = res.data?.access_token;
+    if (token) this.setAuthToken(token);
+    return res.data;
+  }
+
   async getCryptoCapabilities(): Promise<{
     supported_algorithms: string[];
     key_derivation_methods: string[];

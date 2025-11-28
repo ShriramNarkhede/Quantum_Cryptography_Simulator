@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, Zap, Radio, Trash2, Play, Pause, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Eye, Play, Pause, RotateCcw, Activity, ShieldOff } from 'lucide-react';
 import type { EveParams } from '../types';
 
 interface EveControlPanelProps {
@@ -16,6 +16,12 @@ const EveControlPanel: React.FC<EveControlPanelProps> = ({
   const [noiseProbability, setNoiseProbability] = useState(0.1);
   const [lossProbability, setLossProbability] = useState(0.1);
   const [isAttacking, setIsAttacking] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const logAction = (entry: string) => {
+    setLogs(prev => [`${new Date().toLocaleTimeString()} · ${entry}`, ...prev].slice(0, 12));
+  };
 
   const handleStartAttack = () => {
     const params: EveParams = {
@@ -29,6 +35,7 @@ const EveControlPanel: React.FC<EveControlPanelProps> = ({
 
     onEveParamsChange(params);
     setIsAttacking(attackType !== 'none');
+    logAction(`Attack ${attackType} initiated`);
   };
 
   const handleStopAttack = () => {
@@ -40,6 +47,7 @@ const EveControlPanel: React.FC<EveControlPanelProps> = ({
     onEveParamsChange(params);
     setIsAttacking(false);
     setAttackType('none');
+    logAction('Attack halted — returning to passive');
   };
 
   const getAttackDescription = (type: EveParams['attack_type']) => {
@@ -88,282 +96,192 @@ const EveControlPanel: React.FC<EveControlPanelProps> = ({
   };
 
   return (
-    <div className="bg-white border rounded-lg shadow-sm">
-      {/* Header */}
-      <div className="p-4 border-b bg-red-50">
-        <div className="flex items-center space-x-2">
-          <Eye className="w-5 h-5 text-red-600" />
-          <h3 className="text-lg font-medium text-red-900">Eve Control Panel</h3>
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            isAttacking ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'
-          }`}>
+    <div className="glass-card glow-border eve text-white bg-black/40 border border-rose-500/20 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <Eye className="w-5 h-5 text-rose-300" />
+            <h3 className="text-lg font-semibold">Eve Control Panel</h3>
+          </div>
+          <p className="text-xs text-rose-200 mt-1">Simulate attacks on the BB84 channel</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`session-chip ${isAttacking ? 'eve' : ''}`}>
             {isAttacking ? 'ATTACKING' : 'PASSIVE'}
           </div>
-        </div>
-        <p className="text-sm text-red-700 mt-1">
-          Simulate quantum eavesdropping attacks on the BB84 protocol
-        </p>
-      </div>
-
-      <div className="p-4 space-y-6">
-        {/* Attack Type Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Attack Type
-          </label>
-          <div className="space-y-2">
-            {/* None */}
-            <div
-              className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                attackType === 'none' 
-                  ? 'border-gray-400 bg-gray-50' 
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-              onClick={() => setAttackType('none')}
-            >
-              <div className="flex items-center space-x-2">
-                <input 
-                  type="radio" 
-                  checked={attackType === 'none'} 
-                  onChange={() => setAttackType('none')}
-                  className="text-gray-600"
-                />
-                <span className="font-medium text-gray-900">No Attack</span>
-              </div>
-              <p className="text-xs text-gray-600 ml-6">Passive observation only</p>
-            </div>
-
-            {/* Intercept-Resend */}
-            <div
-              className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                attackType === 'intercept_resend' 
-                  ? 'border-red-400 bg-red-50' 
-                  : 'border-gray-200 hover:border-red-300'
-              }`}
-              onClick={() => setAttackType('intercept_resend')}
-            >
-              <div className="flex items-center space-x-2">
-                <input 
-                  type="radio" 
-                  checked={attackType === 'intercept_resend'} 
-                  onChange={() => setAttackType('intercept_resend')}
-                  className="text-red-600"
-                />
-                <span className="font-medium text-gray-900">Intercept & Resend</span>
-              </div>
-              <p className="text-xs text-gray-600 ml-6">Classic attack - measure and resend qubits</p>
-            </div>
-
-            {/* Partial Intercept */}
-            <div
-              className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                attackType === 'partial_intercept' 
-                  ? 'border-orange-400 bg-orange-50' 
-                  : 'border-gray-200 hover:border-orange-300'
-              }`}
-              onClick={() => setAttackType('partial_intercept')}
-            >
-              <div className="flex items-center space-x-2">
-                <input 
-                  type="radio" 
-                  checked={attackType === 'partial_intercept'} 
-                  onChange={() => setAttackType('partial_intercept')}
-                  className="text-orange-600"
-                />
-                <span className="font-medium text-gray-900">Partial Intercept</span>
-              </div>
-              <p className="text-xs text-gray-600 ml-6">Stealthy attack - intercept only some qubits</p>
-            </div>
-
-            {/* Depolarizing */}
-            <div
-              className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                attackType === 'depolarizing' 
-                  ? 'border-purple-400 bg-purple-50' 
-                  : 'border-gray-200 hover:border-purple-300'
-              }`}
-              onClick={() => setAttackType('depolarizing')}
-            >
-              <div className="flex items-center space-x-2">
-                <input 
-                  type="radio" 
-                  checked={attackType === 'depolarizing'} 
-                  onChange={() => setAttackType('depolarizing')}
-                  className="text-purple-600"
-                />
-                <span className="font-medium text-gray-900">Depolarizing Noise</span>
-              </div>
-              <p className="text-xs text-gray-600 ml-6">Introduce random bit/phase flips</p>
-            </div>
-
-            {/* Qubit Loss */}
-            <div
-              className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                attackType === 'qubit_loss' 
-                  ? 'border-yellow-400 bg-yellow-50' 
-                  : 'border-gray-200 hover:border-yellow-300'
-              }`}
-              onClick={() => setAttackType('qubit_loss')}
-            >
-              <div className="flex items-center space-x-2">
-                <input 
-                  type="radio" 
-                  checked={attackType === 'qubit_loss'} 
-                  onChange={() => setAttackType('qubit_loss')}
-                  className="text-yellow-600"
-                />
-                <span className="font-medium text-gray-900">Qubit Loss</span>
-              </div>
-              <p className="text-xs text-gray-600 ml-6">Drop qubits to simulate lossy channel</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Attack Parameters */}
-        {attackType !== 'none' && (
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-gray-700">Attack Parameters</h4>
-            
-            {/* Fraction for intercept attacks */}
-            {['intercept_resend', 'partial_intercept'].includes(attackType) && (
-              <div>
-                <label className="block text-sm text-gray-600 mb-2">
-                  Intercept Fraction: {(fraction * 100).toFixed(0)}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={fraction}
-                  onChange={(e) => setFraction(parseFloat(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0%</span>
-                  <span>50%</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            )}
-
-            {/* Noise probability for depolarizing */}
-            {attackType === 'depolarizing' && (
-              <div>
-                <label className="block text-sm text-gray-600 mb-2">
-                  Noise Probability: {(noiseProbability * 100).toFixed(0)}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="0.5"
-                  step="0.01"
-                  value={noiseProbability}
-                  onChange={(e) => setNoiseProbability(parseFloat(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0%</span>
-                  <span>25%</span>
-                  <span>50%</span>
-                </div>
-              </div>
-            )}
-
-            {/* Loss probability for qubit loss */}
-            {attackType === 'qubit_loss' && (
-              <div>
-                <label className="block text-sm text-gray-600 mb-2">
-                  Loss Probability: {(lossProbability * 100).toFixed(0)}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="0.5"
-                  step="0.01"
-                  value={lossProbability}
-                  onChange={(e) => setLossProbability(parseFloat(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0%</span>
-                  <span>25%</span>
-                  <span>50%</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Attack Description */}
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Attack Description</h4>
-          <p className="text-xs text-gray-600">
-            {getAttackDescription(attackType)}
-          </p>
-        </div>
-
-        {/* Expected Impact */}
-        {attackType !== 'none' && (
-          <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
-            <div className="flex items-center space-x-2 mb-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-600" />
-              <h4 className="text-sm font-medium text-yellow-800">Expected Impact</h4>
-            </div>
-            <div className="text-xs text-yellow-700 space-y-1">
-              <div>Theoretical QBER: {getTheoreticalQBER()}</div>
-              <div>Detection Probability: {getDetectionProbability()}</div>
-              <div>Threshold: 11% QBER</div>
-            </div>
-          </div>
-        )}
-
-        {/* Control Buttons */}
-        <div className="flex space-x-2">
-          {!isAttacking ? (
-            <button
-              onClick={handleStartAttack}
-              disabled={attackType === 'none'}
-              className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <Play className="w-4 h-4" />
-              <span>Start Attack</span>
-            </button>
-          ) : (
-            <button
-              onClick={handleStopAttack}
-              className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              <Pause className="w-4 h-4" />
-              <span>Stop Attack</span>
-            </button>
-          )}
-
           <button
-            onClick={() => {
-              setAttackType('none');
-              setFraction(0.5);
-              setNoiseProbability(0.1);
-              setLossProbability(0.1);
-              handleStopAttack();
-            }}
-            className="flex items-center space-x-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+            type="button"
+            className="copy-button text-white"
+            onClick={() => setCollapsed(prev => !prev)}
           >
-            <RotateCcw className="w-4 h-4" />
-            <span>Reset</span>
+            {collapsed ? 'Expand' : 'Collapse'}
           </button>
         </div>
+      </div>
 
-        {/* Session Info */}
-        <div className="pt-4 border-t border-gray-200">
-          <div className="text-xs text-gray-500">
-            <div>Session: <code className="bg-gray-100 px-1 rounded">{sessionId}</code></div>
-            <div className="mt-1">
-              Status: {isAttacking ? '🔴 Actively attacking' : '🟢 Passive monitoring'}
+      {collapsed ? (
+        <div className="session-chip eve text-sm justify-between w-full">
+          <span>Eve Status</span>
+          <span>{isAttacking ? 'Active attack' : 'Passive'}</span>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-4">
+            <label className="metric-label">Attack Type</label>
+            <div className="flex items-center gap-3">
+              <select
+                value={attackType}
+                onChange={(e) => {
+                  const next = e.target.value as EveParams['attack_type'];
+                  setAttackType(next);
+                  logAction(`Mode switched to ${next}`);
+                }}
+                className="flex-1 bg-black/40 border border-rose-400/30 rounded-2xl px-4 py-2 text-sm text-white focus:outline-none"
+              >
+                <option value="none">No attack (passive)</option>
+                <option value="intercept_resend">Intercept & Resend</option>
+                <option value="partial_intercept">Partial Intercept</option>
+                <option value="depolarizing">Depolarizing Noise</option>
+                <option value="qubit_loss">Qubit Loss</option>
+              </select>
+              <span className="session-chip eve text-xs">
+                <ShieldOff className="w-4 h-4" />
+                QBER 11%
+              </span>
             </div>
           </div>
-        </div>
-      </div>
+
+          {attackType !== 'none' && (
+            <div className="space-y-4">
+              <h4 className="text-xs uppercase tracking-widest text-rose-200">Attack Parameters</h4>
+              {['intercept_resend', 'partial_intercept'].includes(attackType) && (
+                <div>
+                  <div className="flex justify-between text-xs text-slate-300 mb-1">
+                    <span>Intercept Fraction</span>
+                    <span>{Math.round(fraction * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={fraction}
+                    onChange={(e) => setFraction(parseFloat(e.target.value))}
+                    className="w-full accent-rose-400"
+                  />
+                </div>
+              )}
+              {attackType === 'depolarizing' && (
+                <div>
+                  <div className="flex justify-between text-xs text-slate-300 mb-1">
+                    <span>Noise Probability</span>
+                    <span>{Math.round(noiseProbability * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="0.5"
+                    step="0.01"
+                    value={noiseProbability}
+                    onChange={(e) => setNoiseProbability(parseFloat(e.target.value))}
+                    className="w-full accent-rose-400"
+                  />
+                </div>
+              )}
+              {attackType === 'qubit_loss' && (
+                <div>
+                  <div className="flex justify-between text-xs text-slate-300 mb-1">
+                    <span>Loss Probability</span>
+                    <span>{Math.round(lossProbability * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="0.5"
+                    step="0.01"
+                    value={lossProbability}
+                    onChange={(e) => setLossProbability(parseFloat(e.target.value))}
+                    className="w-full accent-rose-400"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-black/40 border border-white/10 p-4 space-y-2 text-sm text-slate-100">
+            <p className="text-xs uppercase tracking-widest text-rose-200">Expected Impact</p>
+            <p>{getAttackDescription(attackType)}</p>
+            {attackType !== 'none' && (
+              <div className="text-xs text-amber-200 space-y-1">
+                <div>Theoretical QBER: {getTheoreticalQBER()}</div>
+                <div>Detection Probability: {getDetectionProbability()}</div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            {!isAttacking ? (
+              <button
+                onClick={handleStartAttack}
+                disabled={attackType === 'none'}
+                className="quantum-button bg-gradient-to-r from-rose-500 to-orange-500 text-white flex-1 flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                <Play className="w-4 h-4" />
+                Start Attack
+              </button>
+            ) : (
+              <button
+                onClick={handleStopAttack}
+                className="quantum-button bg-white/10 border border-white/30 text-white flex-1 flex items-center justify-center gap-2"
+              >
+                <Pause className="w-4 h-4" />
+                Stop Attack
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setAttackType('none');
+                setFraction(0.5);
+                setNoiseProbability(0.1);
+                setLossProbability(0.1);
+                handleStopAttack();
+                logAction('Parameters reset');
+              }}
+              className="quantum-button bg-black/30 border border-white/10 text-white flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Reset
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-xs text-slate-200">
+            <div className="rounded-xl bg-black/40 border border-white/5 p-3">
+              <p className="metric-label">Session</p>
+              <code className="font-mono text-white break-all">{sessionId}</code>
+            </div>
+            <div className="rounded-xl bg-black/40 border border-white/5 p-3">
+              <p className="metric-label">Status</p>
+              <span>{isAttacking ? '🔴 Injecting noise' : '🟢 Monitoring only'}</span>
+            </div>
+          </div>
+
+          <div>
+            <p className="metric-label mb-2">Live Attack Log</p>
+            <div className="h-32 overflow-y-auto rounded-xl bg-black/50 border border-rose-400/30 p-3 font-mono text-xs text-rose-100 space-y-1">
+              {logs.length === 0 ? (
+                <p className="text-rose-200/70">Awaiting commands…</p>
+              ) : (
+                logs.map((entry, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Activity className="w-3 h-3 text-rose-400" />
+                    <span>{entry}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

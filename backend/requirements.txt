@@ -1,3 +1,40 @@
+# # BB84 QKD Simulation System - Enhanced Cryptography Requirements
+
+# # Core Web Framework
+# fastapi==0.104.1
+# uvicorn==0.24.0
+# python-socketio[asyncio_client]==5.9.0
+# python-multipart==0.0.6
+# pydantic==2.4.2
+
+# # Quantum Simulation
+# qiskit==0.44.2
+# qiskit-aer==0.17.2
+# numpy==1.25.2
+
+# # Enhanced Cryptography
+# cryptography==41.0.7           # HKDF, HMAC, and other primitives
+# PyNaCl==1.5.0                  # XChaCha20-Poly1305 via libsodium
+# # hashlib-compat==1.7.3          # SHA3 compatibility
+
+# # Post-Quantum Cryptography
+# liboqs-python==0.8.0         # Open Quantum Safe library (NIST-approved algorithms)
+# pqcrypto==0.20.1             # Pure Python PQC implementations (backup)
+
+# # Development & Utilities
+# python-dotenv==1.0.0
+# pytest==7.4.3                  # For testing
+# pytest-asyncio==0.21.1         # Async testing support
+
+# # Security & Monitoring
+# bcrypt==4.0.1                   # For password hashing (if user auth added)
+# python-jose[cryptography]==3.3.0  # JWT tokens (if needed)
+
+# # Performance (optional)
+# # uvloop==0.19.0                # High-performance event loop (Unix only)
+# # orjson==3.9.10                # Fast JSON serialization
+
+
 # BB84 QKD Simulation System - Enhanced Cryptography Requirements
 
 # Core Web Framework
@@ -7,29 +44,22 @@ python-socketio[asyncio_client]==5.9.0
 python-multipart==0.0.6
 pydantic==2.4.2
 
-# Quantum Simulation
-qiskit==0.44.2
-qiskit-aer==0.17.2
-numpy==1.25.2
+# Quantum Simulation (Updated to compatible versions)
+qiskit>=1.1.0
+qiskit-aer>=0.14.0
+numpy>=1.24.0,<2.0.0
 
 # Enhanced Cryptography
-cryptography==41.0.7           # HKDF, HMAC, and other primitives
-PyNaCl==1.5.0                  # XChaCha20-Poly1305 via libsodium
-hashlib-compat==1.7.3          # SHA3 compatibility
-
-# Post-Quantum Cryptography
-liboqs-python==0.8.0         # Open Quantum Safe library (NIST-approved algorithms)
-pqcrypto==0.20.1             # Pure Python PQC implementations (backup)
+cryptography==41.0.7
+PyNaCl==1.5.0
 
 # Development & Utilities
 python-dotenv==1.0.0
-pytest==7.4.3                  # For testing
-pytest-asyncio==0.21.1         # Async testing support
+pytest==7.4.3
+pytest-asyncio==0.21.1
 
 # Security & Monitoring
-bcrypt==4.0.1                   # For password hashing (if user auth added)
-python-jose[cryptography]==3.3.0  # JWT tokens (if needed)
-
-# Performance (optional)
-# uvloop==0.19.0                # High-performance event loop (Unix only)
-# orjson==3.9.10                # Fast JSON serialization
+bcrypt==4.0.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+SQLAlchemy==2.0.36

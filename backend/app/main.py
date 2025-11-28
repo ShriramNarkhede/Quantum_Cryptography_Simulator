@@ -2,22 +2,32 @@
 Updated BB84 QKD Simulation System - Main FastAPI Application with Enhanced Cryptography
 """
 
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, HTTPException, File, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer
 import socketio
 import uvicorn
 from typing import Dict, List, Optional
 import uuid
 import logging
 from datetime import datetime
+from datetime import timedelta
 import asyncio
 import base64
+import os
 
 from app.models.session import Session, User, UserRole, MessageType, create_system_message, validate_session_security
 from app.services.session_manager import SessionManager
 from app.services.bb84_engine import BB84Engine
 from app.services.eve_module import EveModule
 from app.services.crypto_service import CryptoService, create_message_payload, parse_message_payload
+from jose import jwt, JWTError
+from passlib.hash import bcrypt
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.db import Base as DBBase, engine, get_db
+from app.models.user import User as DBUser
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +43,12 @@ app = FastAPI(
 # CORS middleware for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # Support both CRA and Vite
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173"
+    ],  # Support both CRA and Vite
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,7 +56,12 @@ app.add_middleware(
 
 # Initialize Socket.IO server
 sio = socketio.AsyncServer(
-    cors_allowed_origins=["http://localhost:3000", "http://localhost:5173"],
+    cors_allowed_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173"
+    ],
     logger=True,
     async_mode='asgi',
     engineio_logger=True
@@ -54,6 +74,87 @@ socket_app = socketio.ASGIApp(sio, app)
 session_manager = SessionManager()
 bb84_engine = BB84Engine()
 eve_module = EveModule()
+
+# =======================
+# Authentication (JWT)
+# =======================
+@app.on_event("startup")
+def on_startup_init_db():
+    # Ensure tables exist even when started via `uvicorn app.main:socket_app`
+    try:
+        DBBase.metadata.create_all(bind=engine)
+        logger.info("Database initialized and tables ensured.")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+# Very basic in-memory user store; replace with DB in production
+_USER_DB = {
+    # username: bcrypt-hashed password
+    "admin": bcrypt.hash("password"),
+}
+
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+JWT_ALGO = "HS256"
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=JWT_EXPIRE_MINUTES))
+    to_encode = {"sub": subject, "exp": expire}
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGO)
+
+def verify_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        username: str = payload.get("sub")  # type: ignore
+        if username is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+        return username
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+async def get_current_username(token: str = Depends(oauth2_scheme)) -> str:
+    return verify_token(token)
+
+# Public auth endpoints
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(req: LoginRequest, db: Session = Depends(get_db)):
+    # Lookup user in DB
+    user: DBUser | None = db.query(DBUser).filter(DBUser.username == req.username).first()
+    if user is None or not bcrypt.verify(req.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    access_token = create_access_token(req.username, timedelta(minutes=JWT_EXPIRE_MINUTES))
+    return TokenResponse(access_token=access_token, expires_in=JWT_EXPIRE_MINUTES * 60)
+
+class SignupRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/auth/signup", response_model=TokenResponse)
+async def signup(req: SignupRequest, db: Session = Depends(get_db)):
+    if not req.username or not req.password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username and password required")
+    existing = db.query(DBUser).filter(DBUser.username == req.username).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
+    if len(req.password) < 6:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too short")
+    # Create user
+    db_user = DBUser(username=req.username, password_hash=bcrypt.hash(req.password))
+    db.add(db_user)
+    db.commit()
+    access_token = create_access_token(req.username, timedelta(minutes=JWT_EXPIRE_MINUTES))
+    return TokenResponse(access_token=access_token, expires_in=JWT_EXPIRE_MINUTES * 60)
 
 # REST API Endpoints
 
@@ -69,7 +170,7 @@ async def root():
     }
 
 @app.post("/session/create")
-async def create_session():
+async def create_session(current_user: str = Depends(get_current_username)):
     """Create a new QKD session"""
     try:
         session = session_manager.create_session()
@@ -85,7 +186,7 @@ async def create_session():
         raise HTTPException(status_code=500, detail="Failed to create session")
 
 @app.post("/session/{session_id}/join")
-async def join_session(session_id: str, user_role: str):
+async def join_session(session_id: str, user_role: str, current_user: str = Depends(get_current_username)):
     """Join an existing session with specified role"""
     try:
         if user_role not in ["alice", "bob", "eve"]:
@@ -112,7 +213,7 @@ async def join_session(session_id: str, user_role: str):
         raise HTTPException(status_code=500, detail="Failed to join session")
 
 @app.get("/session/{session_id}/status")
-async def get_session_status(session_id: str):
+async def get_session_status(session_id: str, current_user: str = Depends(get_current_username)):
     """Get current session status and participants"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -130,7 +231,7 @@ async def get_session_status(session_id: str):
     return response
 
 @app.get("/session/{session_id}/security")
-async def get_session_security_info(session_id: str):
+async def get_session_security_info(session_id: str, current_user: str = Depends(get_current_username)):
     """Get detailed security information about the session"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -139,7 +240,7 @@ async def get_session_security_info(session_id: str):
     return session.get_session_security_info()
 
 @app.get("/session/{session_id}/session_key")
-async def get_session_key(session_id: str):
+async def get_session_key(session_id: str, current_user: str = Depends(get_current_username)):
     """Get the session key for encryption/decryption (for frontend use)"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -166,7 +267,7 @@ async def get_session_key(session_id: str):
     }
 
 @app.post("/session/{session_id}/start_bb84")
-async def start_bb84_simulation(session_id: str, n_bits: int = 1000, test_fraction: float = 0.1, use_hybrid: bool = False):
+async def start_bb84_simulation(session_id: str, n_bits: int = 1000, test_fraction: float = 0.1, use_hybrid: bool = False, current_user: str = Depends(get_current_username)):
     """Start BB84 key generation process with optional PQC hybrid mode"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -191,7 +292,7 @@ async def start_bb84_simulation(session_id: str, n_bits: int = 1000, test_fracti
     }
 
 @app.post("/session/{session_id}/send_file")
-async def send_encrypted_file(session_id: str, sender_id: str, file: UploadFile = File(...)):
+async def send_encrypted_file(session_id: str, sender_id: str, file: UploadFile = File(...), current_user: str = Depends(get_current_username)):
     """Send encrypted file to session"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -273,7 +374,7 @@ async def send_encrypted_file(session_id: str, sender_id: str, file: UploadFile 
         raise HTTPException(status_code=500, detail="Failed to send encrypted file")
 
 @app.get("/session/{session_id}/download_file/{message_id}")
-async def download_encrypted_file(session_id: str, message_id: str, user_id: str):
+async def download_encrypted_file(session_id: str, message_id: str, user_id: str, current_user: str = Depends(get_current_username)):
     """Download and decrypt file"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -319,7 +420,7 @@ async def download_encrypted_file(session_id: str, message_id: str, user_id: str
         raise HTTPException(status_code=500, detail="Failed to download file")
 
 @app.get("/session/{session_id}/download_encrypted_file/{message_id}")
-async def download_raw_encrypted_file(session_id: str, message_id: str, user_id: str):
+async def download_raw_encrypted_file(session_id: str, message_id: str, user_id: str, current_user: str = Depends(get_current_username)):
     """Download encrypted file (raw encrypted data)"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -359,7 +460,7 @@ async def download_raw_encrypted_file(session_id: str, message_id: str, user_id:
         raise HTTPException(status_code=500, detail="Failed to download encrypted file")
 
 @app.get("/session/{session_id}/pqc/info")
-async def get_pqc_info(session_id: str):
+async def get_pqc_info(session_id: str, current_user: str = Depends(get_current_username)):
     """Get PQC capabilities and information"""
     try:
         from app.services.pqc_service import pqc_service
@@ -375,7 +476,7 @@ async def get_pqc_info(session_id: str):
         raise HTTPException(status_code=500, detail="Failed to get PQC information")
 
 @app.get("/session/{session_id}/pqc/public_keys")
-async def get_pqc_public_keys(session_id: str):
+async def get_pqc_public_keys(session_id: str, current_user: str = Depends(get_current_username)):
     """Get PQC public keys for key exchange"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -404,7 +505,7 @@ async def get_pqc_public_keys(session_id: str):
         raise HTTPException(status_code=500, detail="Failed to get PQC public keys")
 
 @app.post("/session/{session_id}/pqc/encapsulate")
-async def encapsulate_pqc_key(session_id: str, request: dict):
+async def encapsulate_pqc_key(session_id: str, request: dict, current_user: str = Depends(get_current_username)):
     """Encapsulate a shared secret using peer's Kyber public key"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -439,7 +540,7 @@ async def encapsulate_pqc_key(session_id: str, request: dict):
         raise HTTPException(status_code=500, detail="Failed to encapsulate PQC key")
 
 @app.post("/session/{session_id}/pqc/decapsulate")
-async def decapsulate_pqc_key(session_id: str, request: dict):
+async def decapsulate_pqc_key(session_id: str, request: dict, current_user: str = Depends(get_current_username)):
     """Decapsulate shared secret using our Kyber private key"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -471,7 +572,7 @@ async def decapsulate_pqc_key(session_id: str, request: dict):
         raise HTTPException(status_code=500, detail="Failed to decapsulate PQC key")
 
 @app.post("/session/{session_id}/pqc/sign")
-async def sign_message_pqc(session_id: str, request: dict):
+async def sign_message_pqc(session_id: str, request: dict, current_user: str = Depends(get_current_username)):
     """Sign a message using Dilithium"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -500,7 +601,7 @@ async def sign_message_pqc(session_id: str, request: dict):
         raise HTTPException(status_code=500, detail="Failed to sign message with PQC")
 
 @app.post("/session/{session_id}/pqc/verify")
-async def verify_signature_pqc(session_id: str, request: dict):
+async def verify_signature_pqc(session_id: str, request: dict, current_user: str = Depends(get_current_username)):
     """Verify a Dilithium signature"""
     session = session_manager.get_session(session_id)
     if not session:
@@ -532,7 +633,7 @@ async def verify_signature_pqc(session_id: str, request: dict):
         raise HTTPException(status_code=500, detail="Failed to verify PQC signature")
 
 @app.post("/session/{session_id}/terminate")
-async def terminate_session(session_id: str):
+async def terminate_session(session_id: str, current_user: str = Depends(get_current_username)):
     """Terminate session and clear all ephemeral data"""
     try:
         success = session_manager.terminate_session(session_id)
@@ -859,4 +960,9 @@ async def run_bb84_simulation(session_id: str, n_bits: int, test_fraction: float
         }, room=f"session_{session_id}")
 
 if __name__ == "__main__":
+    # Create tables on startup when running as script
+    try:
+        DBBase.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger.error(f"DB init error: {e}")
     uvicorn.run("app.main:socket_app", host="0.0.0.0", port=8000, reload=True)

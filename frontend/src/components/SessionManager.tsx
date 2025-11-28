@@ -44,7 +44,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
       // Prepare session and user objects
       const session: Session = {
         session_id: sessionData.session_id,
-        status: sessionData.status,
+        status: sessionData.status as Session['status'],
         created_at: sessionData.created_at,
         participants: []
       };
@@ -53,7 +53,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
         user_id: userData.user_id,
         role: 'alice',
         connected: true,
-        joined_at: new Date().toISOString()
+        joined_at: new Date().toISOString(),
+        last_activity: new Date().toISOString()
       };
 
       onSessionJoin(user, session);
@@ -97,13 +98,14 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
       // Prepare session and user objects
       const session: Session = {
         session_id: sessionStatus.session_id,
-        status: sessionStatus.status,
+        status: sessionStatus.status as Session['status'],
         created_at: sessionStatus.created_at,
         participants: participants.map(p => ({
           user_id: p.user_id,
           role: p.role as 'alice' | 'bob' | 'eve',
           connected: p.connected,
-          joined_at: new Date().toISOString()
+          joined_at: new Date().toISOString(),
+          last_activity: new Date().toISOString()
         }))
       };
 
@@ -111,7 +113,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
         user_id: userData.user_id,
         role: selectedRole,
         connected: true,
-        joined_at: new Date().toISOString()
+        joined_at: new Date().toISOString(),
+        last_activity: new Date().toISOString()
       };
 
       onSessionJoin(user, session);
@@ -338,3 +341,4 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
 };
 
 export default SessionManager;
+
