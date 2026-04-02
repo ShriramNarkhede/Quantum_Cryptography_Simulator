@@ -8,7 +8,6 @@ interface StatusBarProps {
   bb84Progress: BB84Progress | null;
   eveDetected: boolean;
   hasSessionKey: boolean;
-
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({
@@ -24,116 +23,93 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'alice': return 'text-alice bg-green-100';
-      case 'bob': return 'text-bob bg-blue-100';
-      case 'eve': return 'text-eve bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'alice': return 'text-[var(--system-cyan)] bg-cyan-500/10 border-cyan-200/50';
+      case 'bob': return 'text-[var(--system-indigo)] bg-indigo-500/10 border-indigo-200/50';
+      case 'eve': return 'text-[var(--system-red)] bg-red-500/10 border-red-200/50';
+      default: return 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] border-[var(--card-border)]';
     }
   };
 
   const getStatusIcon = () => {
     if (eveDetected) {
-      return <AlertTriangle className="w-5 h-5 text-red-500" />;
+      return <AlertTriangle className="w-5 h-5 text-[var(--system-red)]" />;
     }
     if (hasSessionKey) {
-      return <CheckCircle className="w-5 h-5 text-green-500" />;
+      return <CheckCircle className="w-5 h-5 text-[var(--system-green)]" />;
     }
     if (bb84Progress) {
-      return <Clock className="w-5 h-5 text-blue-500" />;
+      return <Clock className="w-5 h-5 text-[var(--system-blue)]" />;
     }
-    return <Users className="w-5 h-5 text-gray-500" />;
+    return <Users className="w-5 h-5 text-[var(--text-secondary)]" />;
   };
 
   const getStatusText = () => {
     if (eveDetected) {
-      return 'Eve Detected - Session Compromised';
+      return 'Session Compromised';
     }
     if (hasSessionKey) {
-      return 'Secure Channel Established';
+      return 'Secure Channel';
     }
     if (bb84Progress) {
-      return bb84Progress.message || 'BB84 in progress...';
+      return bb84Progress.message || 'BB84 Running...';
     }
-    return 'Ready for Key Generation';
-  };
-
-  const getStatusColor = () => {
-    if (eveDetected) {
-      return 'bg-red-50 border-red-200';
-    }
-    if (hasSessionKey) {
-      return 'bg-green-50 border-green-200';
-    }
-    if (bb84Progress) {
-      return 'bg-blue-50 border-blue-200';
-    }
-    return 'bg-gray-50 border-gray-200';
+    return 'Ready to Start';
   };
 
   return (
-    <div className={`p-4 rounded-lg border ${getStatusColor()}`}>
-      <div className="flex items-center justify-between">
+    <div className={`p-5 rounded-2xl material-regular backdrop-blur-md shadow-sm border border-[var(--card-border)] ${eveDetected ? 'ring-2 ring-red-500/30' : ''}`}>
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         {/* Left Side - User & Session Info */}
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-wrap items-center gap-4">
           {/* Current User */}
-          <div className="flex items-center space-x-2">
-            <User className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">You are:</span>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(currentUser.role)}`}>
-              {currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1)}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-primary)] border border-[var(--card-border)]">
+            <User className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+            <span className="text-xs text-[var(--text-secondary)] font-medium">You:</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${getRoleColor(currentUser.role)}`}>
+              {currentUser.role}
             </span>
           </div>
 
           {/* Session ID */}
-          <div className="flex items-center space-x-2">
-            <Users className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Session:</span>
-            <code className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-primary)] border border-[var(--card-border)]">
+            <Users className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+            <span className="text-xs text-[var(--text-secondary)] font-medium">Session:</span>
+            <code className="text-xs font-mono text-[var(--text-primary)]">
               {currentSession.session_id}
             </code>
           </div>
 
           {/* Participants Count */}
-          <div className="text-sm text-gray-600">
-            {currentSession.participants?.length || 1} participant(s)
+          <div className="text-xs text-[var(--text-muted)] font-medium px-2">
+            {currentSession.participants?.length || 1} online
           </div>
         </div>
 
         {/* Right Side - Status */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-end">
           {/* BB84 Progress */}
           {bb84Progress && (
-            <div className="flex items-center space-x-2">
-              <div className="w-32 bg-gray-200 rounded-full h-2">
+            <div className="flex items-center gap-3 bg-[var(--bg-primary)] px-3 py-1.5 rounded-full border border-[var(--card-border)]">
+              <div className="w-24 bg-gray-200 rounded-full h-1.5 overflow-hidden">
                 <div
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    eveDetected ? 'bg-red-500' : hasSessionKey ? 'bg-green-500' : 'bg-blue-500'
-                  }`}
+                  className={`h-full rounded-full transition-all duration-300 ${eveDetected ? 'bg-red-500' : hasSessionKey ? 'bg-green-500' : 'bg-blue-500'
+                    }`}
                   style={{ width: `${(bb84Progress.progress || 0) * 100}%` }}
                 />
               </div>
-              <span className="text-xs text-gray-600">
+              <span className="text-[10px] font-bold text-[var(--text-muted)] w-8 text-right">
                 {Math.round((bb84Progress.progress || 0) * 100)}%
               </span>
             </div>
           )}
 
-          {/* Key Status */}
-          {hasSessionKey && (
-            <div className="flex items-center space-x-1">
-              <Key className="w-4 h-4 text-green-600" />
-              <span className="text-xs text-green-600 font-medium">Key Ready</span>
-            </div>
-          )}
-
           {/* Main Status */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             {getStatusIcon()}
-            <span className={`text-sm font-medium ${
-              eveDetected ? 'text-red-700' : 
-              hasSessionKey ? 'text-green-700' : 
-              bb84Progress ? 'text-blue-700' : 'text-gray-700'
-            }`}>
+            <span className={`text-sm font-bold tracking-tight ${eveDetected ? 'text-[var(--system-red)]' :
+                hasSessionKey ? 'text-[var(--system-green)]' :
+                  bb84Progress ? 'text-[var(--system-blue)]' : 'text-[var(--text-secondary)]'
+              }`}>
               {getStatusText()}
             </span>
           </div>
@@ -142,26 +118,26 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
       {/* BB84 Detailed Progress */}
       {bb84Progress && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <div className="flex items-center justify-between text-xs text-gray-600">
-            <span>Stage: {bb84Progress.stage}</span>
+        <div className="mt-4 pt-3 border-t border-[var(--card-border)] animate-in slide-in-from-top-1">
+          <div className="flex flex-wrap items-center justify-between text-xs font-medium text-[var(--text-secondary)] gap-y-2">
+            <span className="bg-[var(--bg-primary)] px-2 py-1 rounded-md border border-[var(--card-border)]">Stage: {bb84Progress.stage?.replace('_', ' ').toUpperCase()}</span>
             {bb84Progress.qber !== undefined && (
-              <span>
-                QBER: {(bb84Progress.qber * 100).toFixed(2)}%
+              <span className="flex items-center gap-2">
+                QBER: <span className={bb84Progress.qber > (bb84Progress.threshold || 0.11) ? 'text-red-500' : 'text-green-500'}>{(bb84Progress.qber * 100).toFixed(2)}%</span>
                 {bb84Progress.threshold && (
-                  <span className="ml-1">
-                    (Threshold: {(bb84Progress.threshold * 100).toFixed(1)}%)
+                  <span className="text-[var(--text-muted)]">
+                    (Max: {(bb84Progress.threshold * 100).toFixed(1)}%)
                   </span>
                 )}
               </span>
             )}
             {bb84Progress.sifted_length !== undefined && bb84Progress.original_length !== undefined && (
               <span>
-                Sifted: {bb84Progress.sifted_length}/{bb84Progress.original_length} bits
+                Bits: {bb84Progress.sifted_length} / {bb84Progress.original_length}
               </span>
             )}
             {bb84Progress.final_key_length && (
-              <span>Final Key: {bb84Progress.final_key_length} bytes</span>
+              <span className="text-[var(--system-green)]">Final Key: {bb84Progress.final_key_length} bytes</span>
             )}
           </div>
         </div>
@@ -169,12 +145,13 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
       {/* Eve Detection Warning */}
       {eveDetected && (
-        <div className="mt-3 pt-3 border-t border-red-200">
-          <div className="flex items-center space-x-2">
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-            <span className="text-sm text-red-700">
-              Quantum bit error rate exceeded threshold. Communication channel may be compromised.
-            </span>
+        <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-red-700">Security Alert: Eavesdropper Detected</p>
+            <p className="text-xs text-red-600/80 mt-0.5">
+              Quantum error rates indicate active interception. The protocol has been aborted to protect information.
+            </p>
           </div>
         </div>
       )}
@@ -183,4 +160,3 @@ const StatusBar: React.FC<StatusBarProps> = ({
 };
 
 export default StatusBar;
-

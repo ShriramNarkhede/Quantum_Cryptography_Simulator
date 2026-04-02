@@ -1,5 +1,5 @@
-import React from 'react';
-import { Copy, CheckCircle2, AlertTriangle, Wifi, WifiOff, Zap } from 'lucide-react';
+import React, { useState } from 'react';
+import { Copy, CheckCircle2, AlertTriangle, Wifi, WifiOff, Zap, Users, Shield } from 'lucide-react';
 import type { Session, User } from '../types';
 
 interface SessionControlPanelProps {
@@ -13,10 +13,10 @@ interface SessionControlPanelProps {
   onToggleHighContrast: () => void;
 }
 
-const roleMeta: Record<string, { label: string; accent: string }> = {
-  alice: { label: 'Alice · Sender', accent: 'alice' },
-  bob: { label: 'Bob · Receiver', accent: 'bob' },
-  eve: { label: 'Eve · Attacker', accent: 'eve' }
+const roleMeta: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  alice: { label: 'Alice (Sender)', bg: 'bg-cyan-500/10', text: 'text-cyan-600', border: 'border-cyan-200' },
+  bob: { label: 'Bob (Receiver)', bg: 'bg-indigo-500/10', text: 'text-indigo-600', border: 'border-indigo-200' },
+  eve: { label: 'Eve (Attacker)', bg: 'bg-red-500/10', text: 'text-red-600', border: 'border-red-200' }
 };
 
 const SessionControlPanel: React.FC<SessionControlPanelProps> = ({
@@ -29,8 +29,7 @@ const SessionControlPanel: React.FC<SessionControlPanelProps> = ({
   highContrast,
   onToggleHighContrast
 }) => {
-  const [copied, setCopied] = React.useState(false);
-
+  const [copied, setCopied] = useState(false);
   const sessionId = session?.session_id ?? 'No session active';
 
   const participants = React.useMemo(() => {
@@ -60,85 +59,86 @@ const SessionControlPanel: React.FC<SessionControlPanelProps> = ({
     }
   };
 
-  const status = {
-    icon: !serverOnline ? <WifiOff className="text-rose-400" /> :
-      !isConnected ? <AlertTriangle className="text-amber-300" /> :
-        <Wifi className="text-emerald-300" />,
-    text: !serverOnline ? 'Server offline' :
-      !isConnected ? 'Link disrupted' :
-        'Quantum link stable',
-    tone: !serverOnline ? 'text-rose-300' :
-      !isConnected ? 'text-amber-200' : 'text-emerald-300'
+  const getStatusConfig = () => {
+    if (!serverOnline) return { icon: WifiOff, text: 'Server Offline', color: 'text-[var(--system-red)]', bg: 'bg-red-500/10' };
+    if (!isConnected) return { icon: AlertTriangle, text: 'Disconnected', color: 'text-[var(--system-orange)]', bg: 'bg-orange-500/10' };
+    return { icon: Wifi, text: 'Connected', color: 'text-[var(--system-green)]', bg: 'bg-green-500/10' };
   };
 
-  const security = eveDetected
-    ? { text: 'Session compromised', tone: 'text-rose-300', icon: <AlertTriangle className="text-rose-400" /> }
-    : sessionKeyReady
-      ? { text: 'Secure channel active', tone: 'text-emerald-300', icon: <CheckCircle2 className="text-emerald-300" /> }
-      : { text: 'Awaiting key generation', tone: 'text-slate-200', icon: <Zap className="text-slate-200" /> };
+  const status = getStatusConfig();
 
   return (
-    <section className="glass-card glow-border relative overflow-hidden">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-        <div className="space-y-3">
-          <p className="metric-label">Session ID</p>
+    <div className="glass-card space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        {/* Session ID Section */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+            <Shield className="w-4 h-4" />
+            <span className="text-xs font-bold uppercase tracking-wider">Session Identifier</span>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
-            <code className="font-mono text-lg tracking-widest px-3 py-2 rounded-xl bg-black/40 border border-white/10">
+            <div className="px-4 py-2 rounded-xl bg-[var(--bg-secondary)] border border-[var(--card-border)] font-mono text-sm tracking-widest text-[var(--text-primary)] shadow-inner">
               {sessionId}
-            </code>
+            </div>
             {session?.session_id && (
               <button
                 onClick={copySessionId}
-                className="copy-button flex items-center gap-2"
-                aria-label="Copy session id"
+                className="p-2 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] transition-colors active:scale-95"
+                title="Copy Session ID"
               >
-                <Copy className="w-4 h-4" />
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? <CheckCircle2 className="w-5 h-5 text-[var(--system-green)]" /> : <Copy className="w-5 h-5" />}
               </button>
             )}
-            <button
-              onClick={onToggleHighContrast}
-              className={`copy-button ${highContrast ? 'bg-emerald-500/10 text-emerald-200 border-emerald-300/50' : ''}`}
-            >
-              {highContrast ? 'High Contrast: ON' : 'High Contrast'}
-            </button>
           </div>
         </div>
 
-        <div className="flex-1 flex flex-wrap gap-4 justify-start lg:justify-end">
-          {[security, status].map((item, idx) => (
-            <div key={idx} className="session-chip">
-              {item.icon}
-              <span className={`${item.tone} text-sm font-medium`}>{item.text}</span>
-            </div>
-          ))}
+        {/* Status Pills */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Connection Status */}
+          <div className={`px-3 py-1.5 rounded-full border border-current flex items-center gap-2 ${status.color} ${status.bg} bg-opacity-20`}>
+            <status.icon className="w-4 h-4" />
+            <span className="text-xs font-bold">{status.text}</span>
+          </div>
+
+          {/* Security Status */}
+          <div className={`px-3 py-1.5 rounded-full border border-current flex items-center gap-2 ${eveDetected ? 'text-[var(--system-red)] bg-red-500/10' : 'text-[var(--system-green)] bg-green-500/10'} bg-opacity-20`}>
+            {eveDetected ? <AlertTriangle className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+            <span className="text-xs font-bold">{eveDetected ? 'Compromised' : 'Secure'}</span>
+          </div>
+
+          <button
+            onClick={onToggleHighContrast}
+            className={`px-3 py-1.5 rounded-full border text-xs font-bold transition-all ${highContrast ? 'bg-black text-white border-black' : 'bg-transparent text-[var(--text-secondary)] border-[var(--card-border)] hover:bg-[var(--bg-secondary)]'}`}
+          >
+            High Contrast
+          </button>
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        {participants.length === 0 && (
-          <span className="session-chip text-slate-200">Waiting for participants…</span>
-        )}
-        {participants.map((participant) => {
-          const meta = roleMeta[participant.role] ?? { label: participant.role, accent: 'slate' };
-          return (
-            <span
-              key={participant.role}
-              className={`session-chip ${meta.accent}`}
-            >
-              <span className="text-sm font-medium">{meta.label}</span>
-              <span className="text-xs text-slate-400">
-                {participant.connected ? '● linked' : '○ offline'}
-              </span>
-            </span>
-          );
-        })}
+      {/* Participants */}
+      <div className="pt-4 border-t border-[var(--card-border)]">
+        <div className="flex items-center gap-2 mb-3 text-[var(--text-secondary)]">
+          <Users className="w-4 h-4" />
+          <span className="text-xs font-bold uppercase tracking-wider">Active Participants</span>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {participants.length === 0 ? (
+            <span className="text-sm text-[var(--text-muted)] italic">Waiting for connection...</span>
+          ) : (
+            participants.map((p) => {
+              const meta = roleMeta[p.role] || { label: p.role, bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' };
+              return (
+                <div key={p.role} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${meta.bg} ${meta.border}`}>
+                  <div className={`w-2 h-2 rounded-full ${p.connected ? 'bg-[var(--system-green)]' : 'bg-gray-300'}`} />
+                  <span className={`text-xs font-bold ${meta.text}`}>{meta.label}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
-    </section>
+    </div>
   );
 };
 
 export default SessionControlPanel;
-
-
-

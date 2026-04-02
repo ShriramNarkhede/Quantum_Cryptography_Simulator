@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Cryptex Session Onboarding</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3c83f6",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0B0F14", // Updated base dark color per request
+                        "surface-dark": "#151B23", // Glass card base
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom Glassmorphism Utilities */
+        .glass-panel {
+            background: rgba(21, 27, 35, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .glass-header {
+            background: rgba(11, 15, 20, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display min-h-screen flex flex-col overflow-x-hidden text-slate-900 dark:text-slate-100">
+<div class="layout-container flex h-full grow flex-col">
+<!-- Sticky Header -->
+<header class="glass-header sticky top-0 z-50 flex items-center justify-between whitespace-nowrap px-10 py-4 w-full">
+<div class="flex items-center gap-4 text-slate-900 dark:text-white">
+<div class="size-8 flex items-center justify-center rounded bg-primary/20 text-primary">
+<span class="material-symbols-outlined text-[24px]">lock_open</span>
+</div>
+<div class="flex flex-col">
+<h2 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">Cryptex</h2>
+<span class="text-xs font-medium text-slate-500 dark:text-slate-400">Quantum Simulator</span>
+</div>
+</div>
+<div class="flex flex-1 justify-end gap-8">
+<div class="hidden md:flex items-center gap-9">
+<a class="text-slate-900 dark:text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Docs</a>
+<a class="text-slate-900 dark:text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Settings</a>
+<a class="text-slate-900 dark:text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Help</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="hidden md:flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent border border-slate-700 hover:bg-slate-800 text-slate-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] transition-all">
+<span class="truncate">Log In</span>
+</button>
+<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary hover:bg-blue-600 text-white text-sm font-bold leading-normal tracking-[0.015em] shadow-[0_0_15px_rgba(60,131,246,0.3)] transition-all">
+<span class="truncate">Connect Wallet</span>
+</button>
+</div>
+</div>
+</header>
+<div class="px-4 md:px-10 lg:px-40 flex flex-1 justify-center py-8">
+<div class="layout-content-container flex flex-col max-w-[1024px] flex-1 gap-8">
+<!-- Global Status Banner -->
+<div class="glass-panel flex flex-col md:flex-row items-stretch justify-between gap-6 rounded-xl p-5 shadow-lg">
+<div class="flex flex-[2_2_0px] flex-col justify-center gap-4">
+<div class="flex flex-col gap-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-amber-500 text-[20px]">warning</span>
+<p class="text-slate-900 dark:text-white text-base font-bold leading-tight">Global Status: Idle</p>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-normal leading-normal pl-7">No active quantum key distribution session initialized. Please start a session to proceed.</p>
+</div>
+<div class="flex gap-3 pl-7">
+<button class="flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-8 px-4 bg-surface-dark border border-slate-700 hover:border-slate-500 text-slate-300 text-xs font-medium leading-normal w-fit transition-all">
+<span class="truncate">System Logs</span>
+</button>
+</div>
+</div>
+<div class="w-full md:w-1/3 min-h-[120px] rounded-lg relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-blue-900/20 to-purple-900/20 z-10"></div>
+<div class="w-full h-full bg-cover bg-center opacity-60 group-hover:scale-105 transition-transform duration-700" data-alt="Abstract quantum particles network visualization" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC-H6hSpdK6eM2l_hiTdiVbX4eNLbxWG-hSj3GT4Qn2muWzAhlspg4DdAZfMwH0FEKAfCGVAhjaK9MlX6GmEdUO3TCf-qD3zclWCTCDLcjW5K6KJPB8JU9TIBUHtEyOTPgZDwFaXcUoVL3LR8NQoA8VysC1AxzLDLUL9YIb3iAR24dLcRgnLDCatKGrKWo1xS7ilav3Gyabg6hTsQqMX04tnkvIXE6RPxF2E3yaQZowqSz5kKhZOkwJ3g3K2uXTMjLYUNaUtJ0QzuE");'></div>
+</div>
+</div>
+<!-- Stepper -->
+<div class="flex flex-col gap-4 py-2">
+<div class="flex gap-6 justify-between items-end">
+<p class="text-slate-900 dark:text-white text-lg font-bold leading-normal">Workflow Setup</p>
+<p class="text-primary text-sm font-medium leading-normal">Step 1 of 3: Session</p>
+</div>
+<div class="w-full bg-surface-dark rounded-full h-1.5 overflow-hidden">
+<div class="bg-primary h-1.5 rounded-full shadow-[0_0_10px_rgba(60,131,246,0.6)]" style="width: 33%"></div>
+</div>
+<div class="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-medium px-1">
+<span class="text-primary">01 Session</span>
+<span>02 Key Generation</span>
+<span>03 Secure Chat</span>
+</div>
+</div>
+<!-- Main Hero & Actions -->
+<div class="flex flex-col gap-10 py-6">
+<div class="flex flex-col gap-3">
+<h1 class="text-slate-900 dark:text-white text-4xl md:text-5xl font-black leading-tight tracking-tight">
+                            Start Secure Channel
+                        </h1>
+<p class="text-slate-500 dark:text-slate-400 text-lg font-normal leading-normal max-w-[720px]">
+                            Establish a cryptographically secure connection using the BB84 quantum protocol simulation. Choose your role to begin.
+                        </p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Create Session Card -->
+<div class="glass-panel group relative flex flex-col gap-6 rounded-xl p-8 hover:border-primary/50 hover:bg-surface-dark/80 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-primary/10">
+<div class="absolute top-6 right-6 p-2 rounded-full bg-primary/10 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined">arrow_forward</span>
+</div>
+<div class="size-14 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shadow-blue-900/50">
+<span class="material-symbols-outlined text-white text-[32px]">add_circle</span>
+</div>
+<div class="flex flex-col gap-2">
+<h2 class="text-slate-900 dark:text-white text-2xl font-bold leading-tight">Create New Session</h2>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-normal leading-relaxed">
+                                    Initialize as <strong>Alice</strong> (Sender). You will generate the quantum basis and polarization states to transmit to Bob.
+                                </p>
+</div>
+<div class="mt-auto pt-4 border-t border-slate-700/50 flex gap-3">
+<span class="inline-flex items-center rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+                                    Role: Alice
+                                </span>
+<span class="inline-flex items-center rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+                                    Mode: Host
+                                </span>
+</div>
+</div>
+<!-- Join Session Card -->
+<div class="glass-panel group relative flex flex-col gap-6 rounded-xl p-8 hover:border-primary/50 hover:bg-surface-dark/80 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-primary/10">
+<div class="absolute top-6 right-6 p-2 rounded-full bg-primary/10 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined">arrow_forward</span>
+</div>
+<div class="size-14 rounded-full bg-surface-dark border border-slate-600 flex items-center justify-center">
+<span class="material-symbols-outlined text-slate-300 text-[32px]">link</span>
+</div>
+<div class="flex flex-col gap-2">
+<h2 class="text-slate-900 dark:text-white text-2xl font-bold leading-tight">Join Existing Session</h2>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-normal leading-relaxed">
+                                    Connect as <strong>Bob</strong> (Receiver). You will measure the incoming photons and reconcile the key basis with Alice.
+                                </p>
+</div>
+<div class="mt-auto pt-4 border-t border-slate-700/50 flex gap-3">
+<span class="inline-flex items-center rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+                                    Role: Bob
+                                </span>
+<span class="inline-flex items-center rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+                                    Mode: Guest
+                                </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Info Section -->
+<div class="flex flex-col gap-4 mt-4 mb-10">
+<h3 class="text-slate-900 dark:text-white text-lg font-bold">About the Protocol</h3>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+<div class="glass-panel p-4 rounded-lg flex gap-3 items-start">
+<span class="material-symbols-outlined text-primary mt-0.5">security</span>
+<div>
+<h4 class="text-slate-200 text-sm font-bold">BB84 Standard</h4>
+<p class="text-slate-500 text-xs mt-1">Implements the first quantum key distribution protocol developed by Bennett and Brassard.</p>
+</div>
+</div>
+<div class="glass-panel p-4 rounded-lg flex gap-3 items-start">
+<span class="material-symbols-outlined text-primary mt-0.5">visibility_off</span>
+<div>
+<h4 class="text-slate-200 text-sm font-bold">Eavesdrop Detection</h4>
+<p class="text-slate-500 text-xs mt-1">Simulates Eve's interference and calculates the QBER (Quantum Bit Error Rate).</p>
+</div>
+</div>
+<div class="glass-panel p-4 rounded-lg flex gap-3 items-start">
+<span class="material-symbols-outlined text-primary mt-0.5">key</span>
+<div>
+<h4 class="text-slate-200 text-sm font-bold">Sifting &amp; Privacy</h4>
+<p class="text-slate-500 text-xs mt-1">Includes basis sifting, error correction simulation, and privacy amplification.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body></html>

@@ -1,548 +1,582 @@
-# 🔐 Hybrid Quantum + Post-Quantum Secure Communication System
+# 🔐 Cryptex — BB84 Quantum Key Distribution System
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![React](https://img.shields.io/badge/React-18+-61dafb.svg)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-4.0+-3178c6.svg)](https://www.typescriptlang.org/)
-
-### End-to-End Encrypted Message & File Exchange using BB84 Quantum Key Distribution and CRYSTALS-Kyber Post-Quantum Cryptography
+A full-stack simulation of the **BB84 quantum key distribution protocol** built with FastAPI, React (TypeScript), Socket.IO, Redis, and Docker. Cryptex lets multiple users exchange cryptographic keys using quantum mechanics principles and then communicate through end-to-end encrypted chat and file transfer — with a live eavesdropper simulation built right in.
 
 ---
 
-## 📘 Overview
+## 📋 Table of Contents
 
-This project implements a **quantum-resilient communication system** that combines **BB84 Quantum Key Distribution (QKD)** and **CRYSTALS-Kyber** (a NIST-approved Post-Quantum Key Encapsulation Mechanism) to achieve **hybrid key generation**.
-
-It uses **HKDF** to derive session keys for secure **message** and **file exchange** between two users (Alice and Bob). Messages are protected using a **deterministic one-time stream (OTP-style XOR)** with **HMAC-SHA3** authentication, and files are secured with **XChaCha20-Poly1305 AEAD** encryption.
-
-### Key Security Features:
-- ✅ **Quantum safety** - Resistant to quantum attacks
-- ✅ **Tamper detection** - HMAC-SHA3 integrity verification
-- ✅ **Forward secrecy** - Session-based key rotation
-- ✅ **Authenticated encryption** - AEAD for files, HMAC for messages
-- ✅ **Eavesdropping detection** - BB84 QBER monitoring
-- ✅ **Replay protection** - Sequence numbers & timestamps
-
----
-
-## 🧩 System Architecture
-
-```
-      ┌───────────────────────────────┐
-      │         Key Exchange           │
-      │───────────────────────────────│
-      │   BB84 Quantum Key (Kqkd)     │
-      │ + Kyber Post-Quantum Key (Kpqc)│
-      └──────────────┬────────────────┘
-                     │
-                     ▼
-           HKDF Derivation Phase
-   ┌───────────────────────────────────────┐
-   │ Derive Independent Session Keys:       │
-   │   key_stream_seed → Message Encryption │
-   │   key_mac        → Message Auth        │
-   │   key_file       → File Encryption     │
-   └──────────────────┬────────────────────┘
-                      │
-      ┌───────────────┼───────────────────┐
-      ▼                                   ▼
-Secure Message Exchange          Secure File Exchange
-(OTP + HMAC-SHA3)               (XChaCha20-Poly1305 AEAD)
-      │                                   │
-      ▼                                   ▼
-End-to-End Encrypted Chat        End-to-End Encrypted Files
-```
+- [Overview](#-overview)
+- [System Architecture](#-system-architecture)
+- [Technology Stack](#-technology-stack)
+- [Project Structure](#-project-structure)
+- [Backend — Services & API](#-backend--services--api)
+- [Frontend — UI & Components](#-frontend--ui--components)
+- [Docker & Infrastructure](#-docker--infrastructure)
+- [Installation & Running](#-installation--running)
+- [Environment Variables](#-environment-variables)
+- [Security Model](#-security-model)
+- [Testing](#-testing)
+- [Acknowledgments](#-acknowledgments)
 
 ---
 
-## ⚙️ Workflow (Step-by-Step)
+## 🎯 Overview
 
-### 1️⃣ Quantum Key Distribution (BB84)
-- Alice and Bob exchange qubits with random bases
-- Matching bases produce identical bits → **Quantum Key (Kqkd)**
-- Eavesdropping detection via Quantum Bit Error Rate (QBER)
+Cryptex simulates the full lifecycle of quantum-secured communication:
 
-### 2️⃣ Post-Quantum Key Exchange (Kyber)
-- Kyber generates a **shared classical key (Kpqc)** using lattice-based cryptography
-- Resistant to quantum attacks
-
-### 3️⃣ Hybrid Key Creation
-The final **Initial Key Material (IKM)** is:
-```
-IKM = Kqkd || Kpqc
-```
-
-### 4️⃣ HKDF Derivation
-The hybrid key is passed through **HKDF (HMAC-SHA256)** with session ID as salt:
-```
-key_stream_seed = HKDF-Expand(PRK, "otp-stream")
-key_mac = HKDF-Expand(PRK, "hmac-key")
-key_file = HKDF-Expand(PRK, "file-key")
-```
-
-### 5️⃣ Secure Message Exchange
-
-**Encryption:**
-- Derive a unique key stream segment per message:
-  ```
-  key_stream = HKDF-Expand(key_stream_seed, "msg-<seq>-<session>")
-  ciphertext = plaintext XOR key_stream
-  ```
-- Compute integrity tag:
-  ```
-  tag = HMAC_SHA3_256(key_mac, AAD || ciphertext)
-  ```
-- Send `{ciphertext, tag, seq_no, timestamp, session_id}`
-
-**Decryption:**
-- Verify tag → regenerate same key stream → XOR decrypt
-
-✅ **Provides confidentiality + integrity**
-
-### 6️⃣ Secure File Exchange
-Uses **XChaCha20-Poly1305 AEAD**:
-- Random 24-byte `nonce`
-- AAD includes `session_id + file_seq + filename`
-- Encrypts file content + generates authentication tag
-
-**Encryption:**
-```
-ciphertext, tag = XChaCha20_Encrypt(key_file, nonce, AAD, file_bytes)
-```
-
-**Decryption:**
-```
-plaintext = XChaCha20_Decrypt(key_file, nonce, AAD, ciphertext, tag)
-```
-
-✅ **Ensures confidentiality, authenticity, and replay protection**
-
-### 7️⃣ Session Management
-- Session created between Alice and Bob → `session_id = S-12345`
-- On high QBER or logout, all keys are **securely deleted**
-- Session state and history are cleared for privacy
+1. **Authentication** — users register/login with JWT-secured accounts stored in SQLite
+2. **Session creation** — generate a unique session ID and invite participants
+3. **Role assignment** — join as **Alice** (sender), **Bob** (receiver), or **Eve** (eavesdropper)
+4. **BB84 key exchange** — run the BB84 protocol via Qiskit quantum circuit simulation
+5. **Hybrid PQC** — optionally combine the BB84 key with a Kyber512 post-quantum key
+6. **Encrypted communication** — exchange OTP-encrypted chat messages and XChaCha20-Poly1305 encrypted files
+7. **Attack simulation** — Eve can intercept qubits with configurable strategies; QBER monitoring detects intrusions in real-time
 
 ---
 
-## 🧠 Example Flow
+## 🏗️ System Architecture
 
-**Session:** `S-67890`  
-**Message:** `"Hello Bob"`  
-**File:** `report.pdf`
+```mermaid
+graph TB
+    subgraph "Client — React + TypeScript"
+        UI[Web Application\n App.tsx]
+        SC[socketService.ts]
+        API_C[apiService.ts]
+        CS[cryptoService.ts]
+    end
 
-| Step | Action | Result |
-|------|---------|--------|
-| 1 | Run BB84 | Kqkd = `101101...` |
-| 2 | Run Kyber | Kpqc = `a4c1e29f...` |
-| 3 | Combine Keys | IKM = `Kqkd \|\| Kpqc` |
-| 4 | HKDF Derivation | Derives `key_stream_seed`, `key_mac`, `key_file` |
-| 5 | Message Encryption | Ciphertext = `baff70e85c3196107b`<br>Tag = `3af092be45e1...` |
-| 6 | File Encryption | Nonce = random(24B)<br>AEAD Tag = valid |
-| 7 | Receiver Verification | Tag matches → "Hello Bob" decrypted<br>`report.pdf` verified and restored |
+    subgraph "Infrastructure"
+        REDIS[(Redis 7\nCache & Pub/Sub)]
+        DB[(SQLite\nUser Accounts)]
+    end
+
+    subgraph "Backend — FastAPI + Socket.IO"
+        MAIN[main.py\nFastAPI + lifespan]
+        WS[Socket.IO Server]
+        AUTH[JWT Auth\n/auth/login, /auth/signup]
+        SM[SessionManager]
+    end
+
+    subgraph "Core Services"
+        BB84[bb84_engine.py\nQiskit circuits]
+        CRYPTO[crypto_service.py\nHKDF + OTP + AEAD]
+        EVE[eve_module.py\nAttack simulation]
+        PQC[pqc_service.py\nKyber + Dilithium]
+        REDIS_C[redis_client.py\nAsync Redis pool]
+    end
+
+    UI --> SC --> WS
+    UI --> API_C --> MAIN
+    UI --> CS
+
+    MAIN --> AUTH --> DB
+    MAIN --> SM
+    MAIN --> REDIS_C --> REDIS
+
+    SM --> BB84 --> EVE
+    SM --> CRYPTO --> PQC
+    BB84 -.->|Qiskit AerSimulator| BB84
+```
+
+### Component Responsibilities
+
+| Layer | Component | Responsibility |
+|-------|-----------|---------------|
+| Frontend | `App.tsx` | Root state, responsive layout (mobile / tablet / desktop), auth gate |
+| Frontend | `socketService` | Socket.IO event emitter/listener wrapper |
+| Frontend | `apiService` | Axios HTTP client with JWT header injection |
+| Frontend | `cryptoService` | Client-side key storage, QBER history, health scoring |
+| Backend | `main.py` | FastAPI app, lifespan (DB + Redis init), all REST routes, Socket.IO handlers |
+| Backend | `SessionManager` | In-memory session registry, participant management, timeout cleanup |
+| Backend | `BB84Engine` | Qiskit-based qubit generation, transmission, sifting, QBER, privacy amplification |
+| Backend | `CryptoService` | HKDF-SHA256, OTP + HMAC-SHA3-256, XChaCha20-Poly1305, hybrid key derivation |
+| Backend | `EveModule` | Intercept-resend, depolarising noise, qubit-loss simulation |
+| Backend | `PQCService` | Kyber512 KEM, Dilithium2 + SPHINCS+ signatures |
+| Backend | `redis_client` | Global async Redis pool with graceful fallback |
+| Infra | Redis 7-alpine | Caching, future pub/sub for multi-worker scaling |
+| Infra | SQLite + SQLAlchemy | User account persistence |
 
 ---
 
-## 🔒 Security Features
+## 🛠️ Technology Stack
 
-| Feature | Description |
-|----------|--------------|
-| **Quantum-Safe Key Exchange** | BB84 + Kyber hybrid ensures defense against classical & quantum attacks |
-| **Session-Based Key Derivation** | HKDF binds all keys to session ID (prevents cross-session reuse) |
-| **Unique Per-Message Encryption** | Deterministic one-time stream (no key reuse) |
-| **Integrity Verification** | HMAC (SHA3-256) and AEAD ensure tamper detection |
-| **Forward Secrecy** | Each session regenerates keys; old messages stay safe |
-| **Replay Protection** | Sequence numbers & timestamps prevent replays |
+### Backend
 
----
+| Package | Version | Purpose |
+|---------|---------|---------|
+| Python | 3.11 (Docker), 3.10+ (local) | Runtime |
+| FastAPI | 0.104.1 | REST API framework |
+| Uvicorn | 0.24.0 | ASGI server |
+| python-socketio | 5.9.0 `[asyncio_client]` | Socket.IO server |
+| python-multipart | 0.0.6 | File upload support |
+| Pydantic | 2.4.2 | Request/response validation |
+| Qiskit | ≥ 1.1.0 | Quantum circuit simulation |
+| Qiskit-Aer | ≥ 0.14.0 | High-performance quantum simulator backend |
+| NumPy | ≥ 1.24.0, < 2.0 | Numerical operations |
+| cryptography | 41.0.7 | HKDF, HMAC, AES primitives |
+| PyNaCl | 1.5.0 | XChaCha20-Poly1305 (libsodium bindings) |
+| pqcrypto | ≥ 0.3.4 | Pure-Python PQC fallback (Kyber, Dilithium) |
+| liboqs-python | optional | Native C PQC algorithms (auto-detected at startup) |
+| SQLAlchemy | 2.0.36 | ORM for SQLite |
+| python-jose | 3.3.0 `[cryptography]` | JWT generation and validation |
+| passlib | 1.7.4 `[bcrypt]` | Password hashing |
+| bcrypt | 4.0.1 | Bcrypt backend |
+| redis | ≥ 5.0.0 `[hiredis]` | Async Redis client |
+| python-dotenv | 1.0.0 | `.env` file loading |
 
-## 🔐 Quantum Security FAQ
+### Frontend
 
-### 1. Is Our Project Quantum Attack Safe?
+| Package | Purpose |
+|---------|---------|
+| React 18 | UI framework |
+| TypeScript | Type-safe development |
+| Vite | Build tool and dev server |
+| Tailwind CSS | Utility-first CSS (design system base) |
+| Custom CSS (`index.css`) | Glassmorphism, animations, design tokens |
+| Socket.IO Client | Real-time bidirectional events |
+| Axios | HTTP REST client |
+| libsodium-wrappers | Client-side cryptographic operations |
+| Recharts | QBER line charts, crypto stats pie charts |
+| Lucide React | Icon set |
+| Inter + JetBrains Mono | Typography (Google Fonts) |
 
-**Yes, our project is designed to be quantum attack safe** through a hybrid approach combining two quantum-resistant technologies:
+### Databases & Caching
 
-#### ✅ **BB84 Quantum Key Distribution (QKD)**
-- **Information-theoretic security**: BB84's security is based on fundamental laws of quantum mechanics, not computational assumptions
-- **Eavesdropping detection**: Any attempt to intercept or measure quantum states introduces detectable errors (QBER)
-- **No mathematical vulnerability**: Unlike classical cryptography, BB84 cannot be broken by faster computers (classical or quantum) because its security relies on the **no-cloning theorem** and **Heisenberg uncertainty principle**
-- **Future-proof**: Even with unlimited computational power, an attacker cannot clone quantum states or measure them without detection
+| Technology | Version | Role | Details |
+|------------|---------|------|---------|
+| **SQLite** | (built-in) | Primary database | Stores user accounts (username, bcrypt-hashed password). Managed via SQLAlchemy ORM. File lives at `backend/data/app.db`. Created automatically on first startup via `DBBase.metadata.create_all()`. |
+| **Redis** | 7-alpine | Cache / future message broker | Initialized on backend startup via `redis_client.py`. Uses `redis.asyncio` with a connection pool (max 20 connections) and hiredis C-parser. Persistence enabled with `--appendonly yes` so data survives container restarts. Connected via `REDIS_URL=redis://redis:6379/0`. Gracefully skipped if unreachable (local dev without Docker). |
 
-#### ✅ **CRYSTALS-Kyber Post-Quantum Cryptography**
-- **Lattice-based security**: Kyber is based on the hardness of lattice problems (Learning With Errors - LWE)
-- **NIST-approved**: Selected as a standard by NIST in 2022 for post-quantum key encapsulation
-- **Quantum-resistant**: No known quantum algorithm (including Shor's) can efficiently solve lattice problems
-- **Hybrid redundancy**: Even if one component were compromised, the other provides security
+> **SQLite vs Redis responsibilities:**
+> - SQLite = **durable user data** (accounts, passwords). Accessed via SQLAlchemy `scoped_session`.  
+> - Redis = **ephemeral fast storage** (caching results, future real-time pub/sub for multi-worker Socket.IO scaling). Accessed anywhere via `get_redis()` from `redis_client.py`.
 
-#### 🔒 **Hybrid Security Model**
-Our system combines both approaches:
-```
-Final Key = BB84 Quantum Key || Kyber Post-Quantum Key
-```
-This **dual-layer protection** ensures that:
-- If quantum computers break classical cryptography, BB84 still provides security
-- If QKD faces implementation challenges, Kyber provides post-quantum security
-- Both must be compromised simultaneously for a complete breach
+### Infrastructure (Docker)
 
----
-
-### 2. How Is It Different From Traditional Cryptography (RSA, DES, AES)?
-
-Our quantum-safe system fundamentally differs from traditional cryptography in multiple ways:
-
-| Aspect | Traditional Cryptography (RSA, DES, AES) | Our Quantum-Safe System |
-|--------|------------------------------------------|-------------------------|
-| **Security Foundation** | Computational complexity (assumes problems are hard to solve) | Quantum mechanics + Lattice problems (proven mathematically hard) |
-| **Key Exchange** | RSA/ECDH (vulnerable to Shor's algorithm) | BB84 QKD + Kyber (quantum-resistant) |
-| **Attack Model** | Assumes attacker has limited computational power | Assumes attacker may have quantum computers |
-| **Eavesdropping Detection** | ❌ No built-in detection | ✅ QBER monitoring detects interception |
-| **Forward Security** | Optional (depends on implementation) | ✅ Built-in (each session generates new keys) |
-| **Information Theoretic Security** | ❌ No (computational security only) | ✅ Yes (BB84 provides unconditional security) |
-| **Future-Proof** | ❌ Vulnerable to quantum computers | ✅ Resistant to both classical and quantum attacks |
-
-#### **RSA (Rivest-Shamir-Adleman)**
-- **How it works**: Based on the difficulty of factoring large integers
-- **Vulnerability**: Shor's algorithm can factor integers in polynomial time on quantum computers
-- **Our approach**: We don't use RSA; instead, we use BB84 (quantum mechanics) and Kyber (lattice problems)
-
-#### **DES (Data Encryption Standard)**
-- **How it works**: Symmetric key block cipher (56-bit keys)
-- **Vulnerability**: Broken by brute force attacks; vulnerable to quantum Grover's algorithm (reduces security by half)
-- **Our approach**: We use XChaCha20-Poly1305 (256-bit keys) which, even with Grover's algorithm, maintains 128-bit security (still secure)
-
-#### **AES (Advanced Encryption Standard)**
-- **How it works**: Symmetric key block cipher (128/192/256-bit keys)
-- **Vulnerability**: Key exchange (RSA/ECDH) is vulnerable; AES itself is quantum-resistant with sufficient key size
-- **Our approach**: We use quantum-safe key exchange (BB84 + Kyber) combined with XChaCha20-Poly1305, providing end-to-end quantum resistance
-
-#### **Key Differences Summary**:
-
-1. **Key Exchange Mechanism**:
-   - **Traditional**: RSA/ECDH (mathematical problems vulnerable to quantum computers)
-   - **Ours**: BB84 (quantum mechanics) + Kyber (lattice problems)
-
-2. **Security Proof**:
-   - **Traditional**: Computational security (assumes attacker can't solve hard problems)
-   - **Ours**: Information-theoretic security (BB84) + proven mathematical hardness (Kyber)
-
-3. **Eavesdropping Detection**:
-   - **Traditional**: No way to detect passive interception
-   - **Ours**: QBER monitoring automatically detects any interception attempts
-
-4. **Future-Proofing**:
-   - **Traditional**: Will be broken when quantum computers mature
-   - **Ours**: Designed to remain secure even with quantum computers
+| Service | Image | Host Port → Container Port | Purpose |
+|---------|-------|---------------------------|---------|
+| Redis | `redis:7-alpine` | `6379:6379` | Key-value cache with AOF persistence |
+| Backend | `python:3.11-slim` | `8000:8000` | FastAPI + Uvicorn ASGI server |
+| Frontend | `node:20-alpine` → `nginx:alpine` | `3000:80` | Vite production build served by nginx |
+| SQLite | (file in container) | — | Embedded DB, no separate container needed |
 
 ---
 
-### 3. How Does Shor's Algorithm Break Traditional Systems, and Why Is Our System Safe?
-
-#### 🔓 **How Shor's Algorithm Breaks Traditional Cryptography**
-
-**Shor's Algorithm** (developed by Peter Shor in 1994) is a quantum algorithm that can efficiently solve two mathematical problems that form the foundation of most modern cryptography:
-
-1. **Integer Factorization** (breaks RSA)
-2. **Discrete Logarithm Problem** (breaks ECDH, DSA, ECDSA)
-
-##### **Breaking RSA with Shor's Algorithm**:
-
-**Traditional RSA Security**:
-- RSA relies on the fact that factoring large numbers (e.g., 2048-bit) is computationally infeasible
-- Best classical algorithm: General Number Field Sieve (GNFS) - exponential time complexity
-- For a 2048-bit RSA key: Classical computer would need ~10^20 years to break
-
-**Shor's Algorithm Attack**:
-- **Time complexity**: O((log N)³) - polynomial time!
-- For a 2048-bit RSA key: Quantum computer could break it in minutes/hours
-- **How it works**:
-  1. Uses quantum superposition to test all possible factors simultaneously
-  2. Quantum Fourier Transform finds the period of a function
-  3. Period reveals the factors of the number
-  4. Once factors are known, private key is compromised
-
-**Example**:
-```
-RSA-2048 Key → Shor's Algorithm → Factors found → Private key extracted → All encrypted data compromised
-```
-
-##### **Breaking ECDH/ECDSA with Shor's Algorithm**:
-
-**Traditional ECDH Security**:
-- Based on Elliptic Curve Discrete Logarithm Problem (ECDLP)
-- Best classical algorithm: Pollard's rho - exponential time
-- 256-bit ECC key ≈ 3072-bit RSA security classically
-
-**Shor's Algorithm Attack**:
-- Solves discrete logarithm on elliptic curves in polynomial time
-- 256-bit ECC key broken as easily as RSA-2048
-- All ECDH key exchanges become insecure
-
-#### ✅ **Why Our System Is Safe From Shor's Algorithm**
-
-Our system is **immune to Shor's algorithm** because we don't rely on the problems it can solve:
-
-##### **1. BB84 Quantum Key Distribution**
-
-**Why Shor's can't break BB84**:
-- **No mathematical problem to solve**: BB84 doesn't use factorization or discrete logarithms
-- **Security from physics**: Based on quantum mechanical principles:
-  - **No-cloning theorem**: Quantum states cannot be perfectly copied
-  - **Heisenberg uncertainty principle**: Measuring a quantum state disturbs it
-  - **Information-theoretic security**: Security doesn't depend on computational assumptions
-- **Eavesdropping detection**: Any measurement attempt introduces errors (QBER > threshold)
-- **Shor's algorithm is irrelevant**: There's no mathematical problem for Shor's to solve
-
-**BB84 Security Model**:
-```
-Eve tries to intercept → Must measure qubits → Disturbs quantum states → 
-QBER increases → Alice & Bob detect → Abort session → Key remains secret
-```
-
-##### **2. CRYSTALS-Kyber (Lattice-Based Cryptography)**
-
-**Why Shor's can't break Kyber**:
-- **Different mathematical problem**: Kyber is based on **Learning With Errors (LWE)** over lattices
-- **No known quantum speedup**: Lattice problems are believed to be hard even for quantum computers
-- **Quantum resistance**: Even with quantum computers, best known algorithms are still exponential
-- **NIST validation**: Selected specifically because it resists both classical and quantum attacks
-
-**Kyber Security Model**:
-```
-Lattice Problem (LWE) → No efficient quantum algorithm exists → 
-Even quantum computers need exponential time → Secure against Shor's
-```
-
-##### **3. Hybrid Protection**
-
-Our system uses **both** BB84 and Kyber, providing redundancy:
+## 📁 Project Structure
 
 ```
-Attack Scenario Analysis:
-
-1. Quantum computer with Shor's algorithm attacks:
-   ❌ Can't break BB84 (no math problem to solve)
-   ❌ Can't break Kyber (different problem, no quantum speedup)
-   ✅ System remains secure
-
-2. If BB84 implementation has issues:
-   ✅ Kyber still provides post-quantum security
-
-3. If Kyber has future vulnerabilities:
-   ✅ BB84 still provides information-theoretic security
-
-4. Both must fail simultaneously for breach:
-   ✅ Extremely unlikely - different security foundations
-```
-
-#### 📊 **Security Comparison Table**
-
-| System | Shor's Algorithm Impact | Security Status |
-|--------|------------------------|-----------------|
-| **RSA-2048** | ✅ Broken in polynomial time | ❌ Insecure with quantum computers |
-| **ECDH-256** | ✅ Broken in polynomial time | ❌ Insecure with quantum computers |
-| **AES-256** | ⚠️ Key exchange broken (RSA/ECDH) | ⚠️ Vulnerable if key exchange compromised |
-| **BB84 QKD** | ✅ No impact (no math problem) | ✅ Secure (information-theoretic) |
-| **CRYSTALS-Kyber** | ✅ No impact (different problem) | ✅ Secure (quantum-resistant) |
-| **Our Hybrid System** | ✅ No impact (uses BB84 + Kyber) | ✅ Secure (dual-layer protection) |
-
-#### 🎯 **Conclusion**
-
-**Traditional systems (RSA, ECDH)**:
-- Rely on problems (factoring, discrete log) that Shor's algorithm solves efficiently
-- Will be completely broken when large-scale quantum computers arrive
-- Currently secure only because quantum computers aren't powerful enough yet
-
-**Our quantum-safe system**:
-- Uses BB84 (quantum mechanics) and Kyber (lattice problems)
-- Neither component relies on problems that Shor's algorithm can solve
-- Remains secure even with powerful quantum computers
-- Provides **future-proof security** for the quantum computing era
-
----
-
-## 🧮 Comparative Summary
-
-| Component | Our System | AES-GCM | WhatsApp (Signal Protocol) |
-|------------|-------------|----------|-----------------------------|
-| **Key Source** | BB84 + Kyber (Hybrid) | Classical (ECDH/TLS) | Curve25519 + Ratcheting |
-| **Quantum Resistance** | ✅ Yes | ❌ No | ❌ No |
-| **Message Encryption** | OTP-Style XOR + HMAC | AES-256-GCM | AES-256-CBC/GCM |
-| **File Encryption** | XChaCha20-Poly1305 | AES-GCM | AES-GCM |
-| **Integrity Check** | HMAC (SHA3) | Built-in GCM Tag | HMAC-SHA256 |
-| **Eavesdrop Detection** | ✅ BB84 | ❌ | ❌ |
-| **Forward Secrecy** | ✅ | Optional | ✅ |
-| **Replay Protection** | ✅ | Partial | ✅ |
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| **Quantum Key Simulation** | Python (BB84 Engine) |
-| **Post-Quantum Crypto** | Kyber (PQC module) |
-| **Key Derivation** | HKDF (HMAC-SHA256) |
-| **Message Encryption** | XOR-Stream + HMAC (SHA3-256) |
-| **File Encryption** | XChaCha20-Poly1305 (AEAD) |
-| **Backend** | Python (FastAPI + Socket.IO) |
-| **Frontend** | React.js + TypeScript |
-| **Database** | Firebase / Firestore (Session, Users) |
-
----
-
-## 📁 Directory Structure
-
-```
-backend/
- ├── app/
- │   ├── main.py                     # Session orchestration
- │   ├── models/session.py           # Session & message models
- │   ├── services/
- │   │   ├── bb84_engine.py          # Quantum key generation
- │   │   ├── pqc_service.py          # Kyber key encapsulation
- │   │   ├── crypto_service.py       # HKDF, HMAC, XOR, AEAD logic
- │   │   └── eve_module.py           # Eavesdrop simulation (optional)
- │   └── utils/
- │       └── helpers.py              # Helper utilities
-frontend/
- ├── src/
- │   ├── components/                 # UI components
- │   ├── services/                   # Socket, crypto, API layers
- │   ├── pages/                      # Chat, File, Session UI
- │   └── main.tsx                    # Entry point
+bb84-qkd-system/
+│
+├── docker-compose.yml          # 3-service stack: redis + backend + frontend
+│
+├── backend/
+│   ├── Dockerfile              # python:3.11-slim, installs requirements.txt
+│   ├── requirements.txt        # All Python dependencies
+│   ├── test_runner.py          # Comprehensive test suite (12 KB)
+│   ├── comparison_tests.py     # BB84 vs traditional crypto benchmarks (10 KB)
+│   └── app/
+│       ├── main.py             # FastAPI entry point, all routes & Socket.IO events (40 KB, 982 lines)
+│       ├── db.py               # SQLAlchemy engine + SessionLocal for SQLite
+│       ├── redis_client.py     # Global async Redis pool (init_redis, get_redis, close_redis)
+│       ├── models/
+│       │   ├── session.py      # Session, User, BB84Data, CryptoSession, Message (44 KB)
+│       │   └── user.py         # SQLAlchemy DBUser model for authentication
+│       ├── services/
+│       │   ├── bb84_engine.py      # BB84 protocol with Qiskit circuits (13 KB)
+│       │   ├── crypto_service.py   # HKDF, OTP, XChaCha20, hybrid keys (24 KB)
+│       │   ├── eve_module.py       # Attack simulation with Qiskit (12 KB)
+│       │   ├── pqc_service.py      # Kyber/Dilithium/SPHINCS+ (26 KB)
+│       │   ├── pqc_config.py       # PQC algorithm configuration (9 KB)
+│       │   └── session_manager.py  # Session registry and lifecycle (9 KB)
+│       ├── routes/             # Additional route modules
+│       ├── schemas/            # Pydantic schema definitions
+│       └── utils/              # Utility helpers
+│
+├── frontend/
+│   ├── Dockerfile              # Multi-stage: node:20-alpine build → nginx:alpine serve
+│   ├── nginx.conf              # nginx SPA routing config
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   └── src/
+│       ├── main.tsx            # React root with ThemeProvider
+│       ├── App.tsx             # Root component (1211 lines) — auth gate, layout switching
+│       ├── index.css           # Full design system CSS (1331 lines)
+│       ├── context/
+│       │   └── ThemeContext.tsx    # Light/Dark theme provider
+│       ├── hooks/
+│       │   ├── useBreakpoint.ts    # Mobile/tablet/desktop booleans
+│       │   └── useMediaQuery.ts    # Generic CSS media query hook
+│       ├── types/
+│       │   └── index.ts            # All TypeScript interfaces (User, Session, BB84Progress, …)
+│       ├── services/
+│       │   ├── apiService.ts       # Axios HTTP client, JWT management (17 KB)
+│       │   ├── socketService.ts    # Socket.IO event wrappers (6 KB)
+│       │   └── cryptoService.ts    # Client-side key store, health scoring (15 KB)
+│       └── components/
+│           ├── AuthPage.tsx            # Login / Signup form
+│           ├── SessionManager.tsx      # Create / join QKD sessions
+│           ├── BB84Simulator.tsx       # Protocol visualizer + controls
+│           ├── ChatInterface.tsx       # Encrypted messaging UI
+│           ├── FileTransferModule.tsx  # Drag-and-drop file transfer
+│           ├── EveControlPanel.tsx     # Attack configurator (Eve role)
+│           ├── SecurityDashboard.tsx   # Charts, health score, violations
+│           ├── CryptoMonitor.tsx       # Live crypto stats
+│           ├── KeyStatusPanel.tsx      # Key material status + preview
+│           ├── SessionControlPanel.tsx # Session ID + participant badges
+│           ├── StatusBar.tsx           # Compact top-of-session status strip
+│           ├── QBERAlertModal.tsx      # Fullscreen eavesdrop alert
+│           ├── ThemeToggle.tsx         # Light/Dark switch
+│           └── CollapsibleSection.tsx  # Generic expand/collapse wrapper
+│
+├── UI_DOCUMENTATION.md         # Full UI & design system reference
+├── summary.md                  # Project summary
+└── README.md                   # This file
 ```
 
 ---
 
-## 🚀 Installation & Setup
+## 🔧 Backend — Services & API
 
-### Prerequisites
-- Python 3.8+
-- Node.js 16+
-- npm or yarn
+### REST API Endpoints (`main.py`)
 
-### Backend Setup
+#### Authentication
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/auth/signup` | Create new user account |
+| `POST` | `/auth/login` | Login, returns JWT access token |
+
+#### Sessions
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sessions` | Create new QKD session |
+| `POST` | `/api/sessions/{id}/join` | Join session as Alice / Bob / Eve |
+| `GET` | `/api/sessions/{id}` | Get session state |
+| `GET` | `/api/sessions/{id}/security` | Get crypto info, QBER, health score |
+| `GET` | `/api/sessions/{id}/key` | Retrieve derived session key (hex) |
+| `DELETE` | `/api/sessions/{id}` | Terminate session |
+
+#### BB84
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sessions/{id}/bb84/start` | Start BB84 simulation (`n_bits`, `test_fraction`, `use_hybrid`) |
+
+#### Encrypted Communication
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sessions/{id}/files/upload` | Upload + encrypt file (XChaCha20-Poly1305) |
+| `GET` | `/api/sessions/{id}/files/{msg_id}/download` | Download + decrypt file |
+| `GET` | `/api/sessions/{id}/files/{msg_id}/raw` | Download raw encrypted bytes |
+
+#### Post-Quantum Cryptography
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/pqc/info` | Available PQC algorithms and active mode |
+| `POST` | `/api/pqc/kyber/encapsulate` | KEM encapsulation |
+| `POST` | `/api/pqc/dilithium/sign` | Sign a message |
+| `POST` | `/api/pqc/dilithium/verify` | Verify a signature |
+
+#### Misc
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Server health check |
+| `GET` | `/health/redis` | Redis connectivity check |
+| `GET` | `/docs` | Interactive Swagger UI |
+
+---
+
+### Socket.IO Events
+
+#### Client → Server
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `join_session` | `{session_id, user_id}` | Join Socket.IO room |
+| `send_encrypted_message` | `{session_id, user_id, content}` | Send OTP-encrypted message |
+| `request_decrypt` | `{session_id, message_id, user_id}` | Request server-side decryption |
+| `eve_control` | `{session_id, attack_type, attack_params}` | Update Eve attack parameters |
+| `leave_session` | `{session_id}` | Leave room |
+
+#### Server → Client
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `bb84_started` | `{n_bits, hybrid_mode}` | Protocol started |
+| `bb84_progress` | `{stage, progress, qber, threshold, …}` | Live progress updates |
+| `bb84_complete` | `{success, key_length, hybrid_mode, crypto_info}` | Protocol finished |
+| `bb84_error` | `{error}` | Protocol failure |
+| `pqc_key_generated` | `{key_length, algorithm, …}` | Kyber key ready |
+| `encrypted_message` | `{message_id, sender_id, encrypted_payload, …}` | New message received |
+| `message_decrypted` | `{message_id, decrypted_content}` | Decryption result |
+| `encrypted_file` | `{message_id, filename, file_size, …}` | File received |
+| `eve_status_update` | `{attack_type, params}` | Eve config changed |
+| `eve_detected` | `{qber, threshold}` | QBER exceeded threshold |
+| `user_joined` | `{role, user_id}` | Participant connected |
+| `user_disconnected` | `{role}` | Participant left |
+| `session_terminated` | `{}` | Session ended |
+| `security_violation` | `{violation, severity, timestamp}` | Security event |
+
+---
+
+### BB84 Protocol (bb84_engine.py)
+
+The engine uses **Qiskit** (`AerSimulator`) to simulate qubit operations:
+
+1. **Preparation** — Alice generates random bits and random bases (rectilinear `+` or diagonal `×`)
+2. **Transmission** — Qiskit circuits encode each bit in the chosen basis; Eve optionally intercepts
+3. **Measurement** — Bob measures each qubit in a randomly chosen basis
+4. **Sifting** — Only bits where Alice and Bob chose the same basis are kept
+5. **QBER Estimation** — A test fraction of sifted bits are compared; error rate > 11% aborts
+6. **Privacy Amplification** — SHA-256 hashing compresses remaining bits into the final key
+7. **Key Derivation** — `CryptoService.derive_keys()` applies HKDF-SHA256 to produce sub-keys for OTP, HMAC, and file AEAD
+
+**Eve attack modes in EveModule:**
+
+| Strategy | Effect on QBER |
+|----------|---------------|
+| Intercept-Resend | ~25% error (info-theoretic maximum) |
+| Partial Intercept | Proportional to intercept fraction |
+| Depolarizing Noise | Controlled noise probability |
+| Qubit Loss | Channel transmission loss |
+
+---
+
+### Cryptographic Algorithms (crypto_service.py)
+
+| Operation | Algorithm |
+|-----------|-----------|
+| Key derivation | HKDF-SHA256 (from `cryptography` library) |
+| Message encryption | One-Time Pad (XOR with key stream) |
+| Message authentication | HMAC-SHA3-256 |
+| File encryption | XChaCha20-Poly1305 (via PyNaCl / libsodium) |
+| Hybrid key | BB84 key ⊕ Kyber shared secret → HKDF |
+| Password hashing | bcrypt (passlib) |
+| JWT tokens | HS256 (python-jose) |
+
+---
+
+### Post-Quantum Cryptography (pqc_service.py)
+
+| Algorithm | Type | Standard |
+|-----------|------|---------|
+| Kyber512 | KEM | NIST PQC Round 3 |
+| Dilithium2 | Digital Signature | NIST PQC Round 3 |
+| SPHINCS+ | Hash-based Signature | NIST PQC Round 3 |
+
+- Tries to use **liboqs** (C native bindings) first for performance
+- Falls back to **pqcrypto** (pure Python) if liboqs is unavailable
+- Fallback to demo implementations for dev/test without PQC libraries
+
+---
+
+## 🎨 Frontend — UI & Components
+
+### Design System
+
+The UI uses an **iOS-inspired glassmorphism** design language:
+
+| Token | Light | Dark |
+|-------|-------|------|
+| Background | `#F2F2F7` | `#000000` |
+| Card surface | `rgba(255,255,255,0.72)` | `rgba(30,30,30,0.65)` |
+| Alice accent | `#32ADE6` (cyan) | same |
+| Bob accent | `#5856D6` (indigo) | same |
+| Eve accent | `#FF3B30` (red) | same |
+| Success | `#34C759` | same |
+| Warning | `#FF9500` | same |
+
+- **Typography**: Inter (body) + JetBrains Mono (key material, code)
+- **Cards**: `.glass-card` — `backdrop-filter: blur(20px)`, 24 px radius, inner shadow
+- **Glow borders**: `.glow-border` — cyan/blue gradient pseudo-element
+- **Animations**: qubit stream shimmer, particle float, QBER ring, typing indicator
+
+### Responsive Layouts
+
+| Breakpoint | Layout |
+|------------|--------|
+| Mobile < 768px | Single-column stacked; CollapsibleSection hides secondary panels |
+| Tablet 768–1023px | Two-column grid; SessionControlPanel hidden |
+| Desktop ≥ 1024px | Full multi-column: BB84 + KeyStatus, Chat + Files + EvePanel, Security Insights |
+
+### Component Summary
+
+| Component | Purpose |
+|-----------|---------|
+| `AuthPage` | Login / signup with tab toggle, password reveal, inline errors |
+| `SessionManager` | Create session or join by ID, select Alice / Bob / Eve role |
+| `BB84Simulator` | Protocol stage display, qubit stream animation, QBER ring gauge, start/retry controls |
+| `KeyStatusPanel` | Key length + live QBER metrics, blurred key hex preview, progress shimmer bar |
+| `ChatInterface` | Role-colored message bubbles, ciphertext preview, decrypt button, file attachment |
+| `FileTransferModule` | Drag-and-drop upload, upload progress bar, transfer history with decrypt/raw download |
+| `EveControlPanel` | Attack type selector, parameter sliders, start/stop, activity log |
+| `CryptoMonitor` | Encryption status badge, message/file counters, key age, violation count, recommendations |
+| `SecurityDashboard` | Health score, risk level, QBER line chart, crypto pie chart, violations list |
+| `SessionControlPanel` | Session ID with copy, connection + security pills, participants list |
+| `StatusBar` | Compact strip: user role, session ID, participant count, BB84 progress, eve alert |
+| `QBERAlertModal` | Fullscreen breach alert with QBER vs threshold, abort/analyze actions |
+| `ThemeToggle` | Light/Dark switch (Sun/Moon), compact mode for mobile |
+| `CollapsibleSection` | Generic expandable card with chevron animate |
+
+---
+
+## 🐳 Docker & Infrastructure
+
+### Services (docker-compose.yml)
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Host                                                │
+│  localhost:3000 ──► frontend (nginx serving Vite    │
+│                     build, port 80 inside)          │
+│  localhost:8000 ──► backend (Uvicorn FastAPI,       │
+│                     port 8000 inside)               │
+│  localhost:6379 ──► redis (Redis 7-alpine,          │
+│                     port 6379 inside)               │
+└─────────────────────────────────────────────────────┘
+```
+
+**Start order:**
+```
+redis (health: redis-cli ping) → backend → frontend
+```
+
+**Redis persistence:** `--appendonly yes` + named volume `redis_data`
+
+---
+
+## ⚙️ Installation & Running
+
+### Option A — Docker (recommended)
+
+```bash
+git clone https://github.com/ShriramNarkhede/bb84-qkd-system.git
+cd bb84-qkd-system
+
+# Build and start all three services
+docker compose up --build
+
+# Or start in background
+docker compose up -d --build
+```
+
+| URL | Service |
+|-----|---------|
+| http://localhost:3000 | Frontend UI |
+| http://localhost:8000 | Backend API |
+| http://localhost:8000/docs | Swagger UI |
+| http://localhost:8000/health | Health check |
+
+---
+
+### Option B — Local Development
+
+**Prerequisites:** Python 3.10+, Node.js 18+, Redis (optional for local)
+
+**Backend:**
 ```bash
 cd backend
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python -m uvicorn app.main:app --reload
+
+# Start server (with hot reload)
+uvicorn app.main:socket_app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Frontend Setup
+> If Redis is not running locally, set `REDIS_URL` to an unreachable address — the backend logs a warning and continues without Redis.
+
+**Frontend:**
 ```bash
 cd frontend
 npm install
-npm start
+npm run dev                        # Vite dev server at http://localhost:5173
 ```
-
-### Environment Variables
-Create `.env` files in both backend and frontend directories with appropriate configuration.
 
 ---
 
-## 💻 Usage Example
+### Option C — Setup Script
 
-```python
-# Derive hybrid key
-hybrid_key = hkdf_extract(b"S-67890", Kqkd + Kpqc)
-
-# Encrypt message
-ciphertext = xor_encrypt("Hello Bob", key_stream_seed)
-tag = hmac_sha3(key_mac, aad + ciphertext)
-
-# Encrypt file
-ciphertext, tag = xchacha20_poly1305_encrypt(key_file, nonce, aad, file_bytes)
+```bash
+chmod +x setup.sh && ./setup.sh
 ```
-
-### Example Use-Case Scenario:
-1. Alice and Bob start a chat session using the system
-2. BB84 and Kyber generate hybrid keys
-3. HKDF derives message and file encryption keys
-4. Alice sends "Hello Bob" → Encrypted, tagged, verified
-5. Alice uploads report.pdf → Encrypted with AEAD, tag verified
-6. Bob decrypts both securely
-7. Session terminates, all keys erased
-
-✅ **End-to-End confidentiality, integrity, and quantum safety achieved**
 
 ---
 
-## 🔧 API Endpoints
+## 🌍 Environment Variables
 
-### Session Management
-- `POST /api/session/create` - Create new session
-- `POST /api/session/join` - Join existing session
-- `DELETE /api/session/{session_id}` - Terminate session
+| Variable | Default | Where set | Purpose |
+|----------|---------|-----------|---------|
+| `REDIS_URL` | `redis://localhost:6379/0` | `docker-compose.yml` / shell | Redis connection URL |
+| `ALLOWED_ORIGINS` | `*` | `docker-compose.yml` / shell | CORS allowed origins |
+| `SECRET_KEY` | hardcoded fallback | `main.py` | JWT signing secret — **override in production** |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | `main.py` | JWT expiry |
 
-### Messaging
-- `POST /api/message/send` - Send encrypted message
-- `GET /api/message/history/{session_id}` - Get message history
+---
 
-### File Transfer
-- `POST /api/file/upload` - Upload encrypted file
-- `GET /api/file/download/{file_id}` - Download encrypted file
+## 🔒 Security Model
+
+### Quantum Layer
+- **BB84 Protocol** using Qiskit `AerSimulator` — unconditional security from quantum mechanics
+- **QBER threshold 11%** — classical upper bound for noise without eavesdropper; exceeding it aborts the key exchange
+- **Basis randomisation** — Alice and Bob use independently random bases; Eve cannot guess without introducing detectable errors
+
+### Cryptographic Layer
+- **HKDF-SHA256** — derives four sub-keys from master BB84 key: OTP key, HMAC key, AEAD key, key confirmation
+- **OTP + HMAC-SHA3-256** — information-theoretically secure messages (key stream consumed once per message, sequence-numbered)
+- **XChaCha20-Poly1305** — authenticated encryption for file transfers
+- **Hybrid mode** — BB84 key ⊕ Kyber512 shared secret fed into HKDF; provides classical + post-quantum security simultaneously
+
+### Post-Quantum Layer
+- **Kyber512** — NIST-standardised lattice-based KEM
+- **Dilithium2** — NIST-standardised lattice-based digital signatures
+- **SPHINCS+** — hash-based signatures (stateless, conservative security)
+
+### Session & Auth Layer
+- **bcrypt password hashing** — cost factor default 12
+- **JWT HS256 tokens** — 30-minute expiry, stored in `localStorage`
+- **Ephemeral session keys** — cleared from memory on session termination
+- **Role isolation** — Eve cannot access the derived session key (masked in UI and blocked server-side for decryption)
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Backend tests
 cd backend
-python -m pytest tests/
+source venv/bin/activate
 
-# Frontend tests
-cd frontend
-npm test
+# Full test suite
+python test_runner.py
+
+# BB84 vs traditional crypto comparison benchmarks
+python comparison_tests.py
 ```
 
----
-
-## 📚 References
-
-- [NIST PQC Standardization: CRYSTALS-Kyber](https://csrc.nist.gov/projects/post-quantum-cryptography/selected-algorithms-2022)
-- [BB84 Quantum Key Distribution Protocol](https://en.wikipedia.org/wiki/BB84)
-- [RFC 5869: HKDF Key Derivation Function](https://tools.ietf.org/html/rfc5869)
-- [XChaCha20-Poly1305 AEAD Spec](https://tools.ietf.org/html/draft-irtf-cfrg-xchacha)
-- [SHA-3 / Keccak Standard (FIPS 202)](https://csrc.nist.gov/publications/detail/fips/202/final)
+`test_runner.py` exercises: BB84Engine, CryptoService, EveModule, PQCService, SessionManager, and API endpoint integration.
 
 ---
 
-## 🤝 Contributing
+## 📚 Additional Documentation
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+| File | Contents |
+|------|---------|
+| [`UI_DOCUMENTATION.md`](./UI_DOCUMENTATION.md) | Full design system, all 14 components, services, hooks, types |
+| [`summary.md`](./summary.md) | Comprehensive project summary |
 
 ---
 
-## 👨‍💻 Developer
+## 🙏 Acknowledgments
 
-**Narkhede Shriram Sharad**  
-B.E. Information Technology — Trinity College of Engineering & Research, Pune  
-Project: Hybrid Quantum + Post-Quantum Secure Communication System
-
----
-
-## ⚠️ Disclaimer
-
-This is a research project demonstrating quantum and post-quantum cryptographic concepts. While the implementation follows security best practices, it should not be used in production environments without thorough security auditing and testing.
+- **Qiskit** — IBM's open-source quantum computing framework
+- **liboqs / Open Quantum Safe** — NIST PQC algorithm implementations
+- **BB84 Protocol** — Charles H. Bennett & Gilles Brassard, 1984
+- **NIST PQC Standardization** — Kyber, Dilithium, SPHINCS+ standards
 
 ---
 
-## 🔮 Future Enhancements
+## 👤 Author
 
-- [ ] Real quantum hardware integration
-- [ ] Multi-party quantum key distribution
-- [ ] Advanced post-quantum algorithms (Dilithium, SPHINCS+)
-- [ ] Mobile application support
-- [ ] Enhanced UI/UX with quantum visualization
-- [ ] Performance optimization for large files
-- [ ] Cross-platform compatibility improvements
+**Shriram Narkhede**
+
+---
+
+*Built for educational and research purposes demonstrating quantum-secured communication end-to-end.*

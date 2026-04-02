@@ -16,7 +16,7 @@ type IncomingEncryptedMessage = {
 
 class SocketService {
     private socket: Socket | null = null;
-    private serverUrl: string = 'http://localhost:8000';
+    private serverUrl: string = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     connect(): Socket {
         if (!this.socket) {

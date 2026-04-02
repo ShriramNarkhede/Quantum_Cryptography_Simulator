@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Eve Advanced Attack Control Panel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ef4444", 
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0B0F14",
+                        "glass": "rgba(255, 255, 255, 0.05)",
+                        "glass-border": "rgba(255, 255, 255, 0.1)",
+                        "neon-cyan": "#06b6d4",
+                        "neon-purple": "#8b5cf6",
+                        "neon-red": "#ef4444",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"],
+                        "sans": ["Space Grotesk", "sans-serif"],
+                    },
+                    backgroundImage: {
+                        "quantum-gradient": "linear-gradient(to bottom right, #0B0F14, #1a0505, #0B0F14)",
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-dark text-slate-100 font-display min-h-screen flex flex-col overflow-x-hidden selection:bg-primary/30">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-glass-border bg-glass backdrop-blur-md px-10 py-3 fixed w-full top-0 z-50">
+<div class="flex items-center gap-4">
+<div class="size-8 text-primary flex items-center justify-center bg-primary/20 rounded-lg">
+<span class="material-symbols-outlined text-[24px]">security_update_warning</span>
+</div>
+<h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">Cryptex Simulator <span class="text-slate-500 font-normal mx-2">/</span> Eve Dashboard</h2>
+</div>
+<div class="flex flex-1 justify-end gap-8">
+<div class="hidden md:flex items-center gap-9">
+<a class="text-slate-400 hover:text-white transition-colors text-sm font-medium leading-normal" href="#">Dashboard</a>
+<a class="text-slate-400 hover:text-white transition-colors text-sm font-medium leading-normal" href="#">Key Exchange</a>
+<a class="text-white text-sm font-medium leading-normal border-b-2 border-primary pb-0.5" href="#">Advanced (Eve)</a>
+<a class="text-slate-400 hover:text-white transition-colors text-sm font-medium leading-normal" href="#">Settings</a>
+</div>
+<div class="flex gap-2">
+<button class="flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-glass border border-glass-border text-white hover:bg-white/10 transition-all">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ml-2 border border-glass-border ring-2 ring-primary/50" data-alt="User profile avatar" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDD1PzMq4HWZAtwRNQV3vsTWv8qepgFARRN_2-AcuyCPnoSp-PfMSV6GA7GiXZHa8mUlKLcGlwMQd8xV7HutVJ4bu2QxqJJijMuKsJYG4SjQ_sBCa0yDR-LIXRaAJTkLKsjMrIBSNEWRQojAgR6_-I6h7iamCs6PA1MVqzo7LxiOjvXCAJjddeRdAvcRQEsaHbWg2U-v0ytmJ2CHFtOIEP9ECR6Vc7TYOJYvJFmHU7Iq-Ml8R_gwruauxaKaNyoGEj8aXXMdmPMRTc");'></div>
+</div>
+</div>
+</header>
+<main class="flex-1 pt-24 pb-12 px-6 lg:px-12 flex flex-col lg:flex-row gap-8 max-w-[1600px] mx-auto w-full bg-quantum-gradient">
+<div class="flex flex-col gap-6 lg:w-1/3 xl:w-1/4 min-w-[300px]">
+<div>
+<h1 class="text-3xl font-bold tracking-tight text-white mb-2">Attack Control</h1>
+<p class="text-slate-400 text-sm">Configure interception strategies.</p>
+</div>
+<div class="relative overflow-hidden rounded-xl bg-red-900/20 border border-red-500/30 p-4">
+<div class="absolute inset-0 bg-red-500/5 animate-pulse"></div>
+<div class="relative z-10 flex items-center gap-3">
+<div class="size-2 rounded-full bg-red-500 shadow-[0_0_10px_#ef4444] animate-ping"></div>
+<div class="size-2 rounded-full bg-red-500 shadow-[0_0_10px_#ef4444] absolute"></div>
+<span class="text-red-400 font-bold uppercase tracking-wider text-sm">Interception Active</span>
+</div>
+<p class="relative z-10 text-red-200/60 text-xs mt-1 ml-5">Man-in-the-Middle active on quantum channel.</p>
+</div>
+<div class="p-6 rounded-2xl bg-glass border border-glass-border backdrop-blur-sm shadow-xl flex flex-col gap-6">
+<div>
+<label class="block text-slate-300 text-sm font-medium mb-2">Attack Strategy</label>
+<div class="relative">
+<select class="w-full bg-[#0B0F14] border border-glass-border rounded-lg text-white py-2.5 px-3 focus:ring-1 focus:ring-primary focus:border-primary text-sm appearance-none cursor-pointer">
+<option>Intercept-Resend</option>
+<option>Depolarizing Noise</option>
+<option>Photon Splitting</option>
+<option>Qubit Loss Injection</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-2">
+<label class="text-slate-300 text-sm font-medium">Interception Probability</label>
+<span class="text-primary font-mono text-xs">75%</span>
+</div>
+<input class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary" max="100" min="0" type="range" value="75"/>
+<div class="flex justify-between mt-1 text-[10px] text-slate-500">
+<span>Stealthy</span>
+<span>Aggressive</span>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-2">
+<label class="text-slate-300 text-sm font-medium">Noise Intensity</label>
+<span class="text-primary font-mono text-xs">12%</span>
+</div>
+<input class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary" max="100" min="0" type="range" value="12"/>
+</div>
+<div class="pt-4 border-t border-glass-border">
+<button class="group flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl h-12 bg-red-600 hover:bg-red-500 text-white font-bold transition-all shadow-lg shadow-red-900/20">
+<span class="material-symbols-outlined group-hover:rotate-180 transition-transform">refresh</span>
+<span>Apply Configuration</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<button class="p-3 rounded-xl bg-glass border border-glass-border hover:bg-white/5 text-slate-300 hover:text-white transition-all flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-xl">stop_circle</span>
+<span class="text-xs font-medium">Halt Attack</span>
+</button>
+<button class="p-3 rounded-xl bg-glass border border-glass-border hover:bg-white/5 text-slate-300 hover:text-white transition-all flex flex-col items-center gap-2">
+<span class="material-symbols-outlined text-xl">save</span>
+<span class="text-xs font-medium">Save Log</span>
+</button>
+</div>
+</div>
+<div class="flex flex-col gap-6 lg:w-2/3 xl:w-2/4">
+<div class="flex justify-between items-end">
+<div>
+<h1 class="text-3xl font-bold tracking-tight text-white mb-2">Live Interception</h1>
+<p class="text-slate-400 text-sm">Real-time quantum state measurement.</p>
+</div>
+<div class="flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20">
+<span class="material-symbols-outlined text-red-500 text-sm">visibility</span>
+<span class="text-red-500 text-xs font-bold uppercase tracking-wider">Monitoring</span>
+</div>
+</div>
+<div class="relative h-[480px] w-full rounded-2xl bg-[#0B1016] border border-glass-border overflow-hidden flex flex-col shadow-2xl">
+<div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
+<div class="absolute inset-0" style="background-image: radial-gradient(circle at 50% 50%, rgba(239, 68, 68, 0.05) 0%, transparent 60%);"></div>
+<div class="flex justify-between px-8 py-6 z-10 border-b border-glass-border/30 bg-[#0B1016]/50 backdrop-blur-sm">
+<div class="text-center opacity-60">
+<div class="text-xs text-neon-purple font-mono mb-1">SOURCE</div>
+<h3 class="text-white font-bold">Alice</h3>
+</div>
+<div class="text-center">
+<div class="text-xs text-red-500 font-mono mb-1 font-bold animate-pulse">INTERCEPTOR</div>
+<h3 class="text-white font-bold text-xl drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]">Eve</h3>
+</div>
+<div class="text-center opacity-60">
+<div class="text-xs text-neon-cyan font-mono mb-1">TARGET</div>
+<h3 class="text-white font-bold">Bob</h3>
+</div>
+</div>
+<div class="flex-1 relative flex items-center justify-center overflow-hidden">
+<div class="absolute w-[90%] h-[2px] bg-slate-800/50"></div>
+<div class="absolute left-10 flex gap-16 animate-[slideRight_4s_linear_infinite]">
+<div class="flex flex-col items-center gap-2">
+<div class="size-3 rounded-full bg-neon-purple shadow-[0_0_10px_#8b5cf6]"></div>
+<span class="text-[10px] font-mono text-slate-500">|↑⟩</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="size-3 rounded-full bg-neon-purple shadow-[0_0_10px_#8b5cf6]"></div>
+<span class="text-[10px] font-mono text-slate-500">|↗⟩</span>
+</div>
+</div>
+<div class="relative z-20 size-48 rounded-full border border-red-500/30 bg-[#0B0F14]/90 backdrop-blur-md flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.15)] group">
+<div class="absolute inset-0 rounded-full border border-dashed border-red-500/20 animate-[spin_10s_linear_infinite]"></div>
+<div class="flex flex-col items-center gap-1">
+<span class="material-symbols-outlined text-4xl text-red-500 mb-2">track_changes</span>
+<div class="text-xs text-red-400 font-mono">MEASURING</div>
+<div class="bg-red-900/40 px-2 py-0.5 rounded border border-red-500/30 text-white font-mono text-sm mt-1">
+                                 Basis: <span class="text-red-300">+</span>
+</div>
+</div>
+<div class="absolute -top-12 bg-black/80 border border-red-500/50 px-3 py-1.5 rounded text-xs font-mono text-white opacity-0 animate-[fadeInOut_3s_ease-in-out_infinite_1s]">
+                            Outcome: 1
+                        </div>
+</div>
+<div class="absolute right-10 flex gap-16 animate-[slideRight_4s_linear_infinite_2s]">
+<div class="flex flex-col items-center gap-2">
+<div class="size-3 rounded-full bg-red-500 shadow-[0_0_10px_#ef4444]"></div> 
+<span class="text-[10px] font-mono text-red-400">|→⟩</span>
+</div>
+</div>
+</div>
+<div class="bg-[#0B0F14] border-t border-glass-border p-3 flex justify-between text-xs font-mono text-slate-500">
+<div>Latency: <span class="text-slate-300">0.04ms</span></div>
+<div>Channel Loss: <span class="text-slate-300">0.2dB/km</span></div>
+<div>Resend Mode: <span class="text-red-400">ACTIVE</span></div>
+</div>
+</div>
+<div class="w-full bg-[#0B1016] border border-glass-border rounded-xl p-4 h-48 overflow-y-auto font-mono text-xs shadow-inner custom-scrollbar">
+<div class="flex items-center justify-between mb-2 sticky top-0 bg-[#0B1016] pb-2 border-b border-slate-800 z-10">
+<span class="text-slate-400 font-bold uppercase flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">terminal</span>
+                        Attack Activity Log
+                    </span>
+<span class="text-red-500/80 animate-pulse">● Live</span>
+</div>
+<div class="flex flex-col gap-1.5 text-slate-300">
+<p class="border-l-2 border-slate-700 pl-2"><span class="text-slate-500">[10:42:01.450]</span> <span class="text-blue-400">DETECT:</span> Photon burst detected on channel.</p>
+<p class="border-l-2 border-red-500 pl-2 bg-red-500/5 py-0.5"><span class="text-slate-500">[10:42:01.452]</span> <span class="text-red-400">INTERCEPT:</span> Qubit #402 captured using Rectilinear (+) basis.</p>
+<p class="border-l-2 border-red-500 pl-2 bg-red-500/5 py-0.5"><span class="text-slate-500">[10:42:01.453]</span> <span class="text-red-400">RESULT:</span> Measurement collapsed state to |0⟩.</p>
+<p class="border-l-2 border-orange-500 pl-2"><span class="text-slate-500">[10:42:01.455]</span> <span class="text-orange-400">RESEND:</span> Emitted polarized photon |0⟩ to Bob.</p>
+<p class="border-l-2 border-slate-700 pl-2"><span class="text-slate-500">[10:42:01.520]</span> <span class="text-blue-400">DETECT:</span> Qubit #403 arrived. Signal weak (-15dBm).</p>
+<p class="border-l-2 border-red-500 pl-2 bg-red-500/5 py-0.5"><span class="text-slate-500">[10:42:01.522]</span> <span class="text-red-400">INTERCEPT:</span> Qubit #403 captured using Diagonal (x) basis.</p>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-6 lg:w-full xl:w-1/4 min-w-[300px]">
+<div>
+<h1 class="text-3xl font-bold tracking-tight text-white mb-2">Impact Metrics</h1>
+<p class="text-slate-400 text-sm">Effectiveness vs Detection Risk.</p>
+</div>
+<div class="flex flex-col gap-4">
+<div class="p-5 rounded-2xl bg-gradient-to-br from-red-900/20 to-glass border border-red-500/20 backdrop-blur-md shadow-xl">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-sm font-bold text-white uppercase tracking-wide">Information Gained</h3>
+<span class="material-symbols-outlined text-red-500">lock_open</span>
+</div>
+<div class="flex items-end gap-2 mb-2">
+<span class="text-5xl font-bold text-white tracking-tighter">48.2</span>
+<span class="text-xl text-red-400 font-medium mb-1">%</span>
+</div>
+<div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+<div class="h-full bg-red-500 w-[48%]"></div>
+</div>
+<p class="text-xs text-slate-400 mt-2">Theoretical max for this strategy: ~50%</p>
+</div>
+<div class="p-6 rounded-2xl bg-glass border border-glass-border backdrop-blur-md shadow-xl relative overflow-hidden">
+<div class="flex items-center justify-between mb-6 relative z-10">
+<h3 class="text-sm font-bold text-white uppercase tracking-wide">Induced QBER</h3>
+<span class="material-symbols-outlined text-orange-400">warning</span>
+</div>
+<div class="relative size-40 mx-auto mb-4 z-10">
+<svg class="size-full rotate-[-90deg]" viewBox="0 0 36 36">
+<path class="text-slate-800" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="3"></path>
+<path class="text-red-500" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="25, 100" stroke-linecap="round" stroke-width="3"></path>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-3xl font-bold text-white">25.0<span class="text-sm text-slate-400">%</span></span>
+<span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest mt-1">Detected</span>
+</div>
+</div>
+<div class="space-y-3 relative z-10">
+<div class="flex justify-between items-center text-xs">
+<span class="text-slate-400">Current QBER</span>
+<span class="text-white font-mono">25.0%</span>
+</div>
+<div class="flex justify-between items-center text-xs">
+<span class="text-slate-400">Detection Threshold</span>
+<span class="text-green-400 font-mono">11.0%</span>
+</div>
+<div class="p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-300 text-center mt-2">
+                            Warning: Presence Detected by Alice/Bob
+                        </div>
+</div>
+<div class="absolute -bottom-10 -right-10 w-32 h-32 bg-red-500/10 blur-[50px] rounded-full pointer-events-none"></div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-background-dark/50 rounded-xl p-4 border border-white/5">
+<p class="text-slate-400 text-[10px] uppercase mb-1">Bits Compromised</p>
+<p class="text-xl font-mono text-white">128</p>
+</div>
+<div class="bg-background-dark/50 rounded-xl p-4 border border-white/5">
+<p class="text-slate-400 text-[10px] uppercase mb-1">Time Active</p>
+<p class="text-xl font-mono text-white">04:12</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<style>
+        @keyframes slideRight {
+            0% { transform: translateX(0); opacity: 0; }
+            10% { opacity: 1; }
+            45% { transform: translateX(180px); opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 0; }
+        }
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; transform: translateY(5px); }
+            20%, 80% { opacity: 1; transform: translateY(0); }
+        }.custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+
+</body></html>

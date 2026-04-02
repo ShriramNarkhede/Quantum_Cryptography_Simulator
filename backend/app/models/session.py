@@ -365,7 +365,15 @@ class Session:
                     'session_id': encrypted_msg.session_id,
                     'crypto_type': 'otp_hmac_sha3'
                 }
+                # Add PQC signature if available
+                if encrypted_msg.pqc_signature:
+                    payload['pqc_signature'] = encrypted_msg.pqc_signature.hex()
+                    payload['pqc_algorithm'] = encrypted_msg.pqc_algorithm
+                    payload['crypto_type'] = 'otp_hmac_sha3_pqc'
+                
                 size_bytes = len(encrypted_msg.ciphertext) + len(encrypted_msg.hmac_tag)
+                if encrypted_msg.pqc_signature:
+                    size_bytes += len(encrypted_msg.pqc_signature)
                 seq_no = encrypted_msg.seq_no
             else:
                 # Handle other message types
@@ -422,7 +430,9 @@ class Session:
                         hmac_tag=bytes.fromhex(payload['hmac_tag']),
                         seq_no=payload['seq_no'],
                         timestamp=payload['timestamp'],
-                        session_id=payload['session_id']
+                        session_id=payload['session_id'],
+                        pqc_signature=bytes.fromhex(payload['pqc_signature']) if payload.get('pqc_signature') else None,
+                        pqc_algorithm=payload.get('pqc_algorithm')
                     )
                     
                     return self.crypto_session.crypto_service.decrypt_message_otp(encrypted_msg)

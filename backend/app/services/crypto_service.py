@@ -72,6 +72,8 @@ class EncryptedMessage:
     timestamp: int
     session_id: str
     nonce: Optional[bytes] = None  # For AEAD modes
+    pqc_signature: Optional[bytes] = None  # PQC signature for post-quantum authentication
+    pqc_algorithm: Optional[str] = None  # PQC algorithm used (e.g., "Dilithium2")
 
 
 @dataclass
@@ -165,14 +167,13 @@ class CryptoService:
             raise RuntimeError("Keys not derived yet")
         
         # Check for key stream reuse only when recording (i.e., during encryption)
-        start_offset = seq_no * 1024  # Allocate 1KB segments per message
-        end_offset = start_offset + length
-        
+        # Check for key stream reuse only when recording (i.e., during encryption)
         if record_usage:
-            for used_start, used_end in self.used_key_stream_offsets:
-                if not (end_offset <= used_start or start_offset >= used_end):
-                    raise RuntimeError(f"Key stream reuse detected: {start_offset}-{end_offset} overlaps with {used_start}-{used_end}")
-            # Record this usage
+            # Find the next available start offset to simulate a continuous keystream pool
+            start_offset = 0
+            if self.used_key_stream_offsets:
+                start_offset = max(end for _, end in self.used_key_stream_offsets)
+            end_offset = start_offset + length
             self.used_key_stream_offsets.append((start_offset, end_offset))
         
         # Generate key stream using HKDF-expand
@@ -224,12 +225,28 @@ class CryptoService:
         )
         hmac_tag = h.digest()
         
+        # Add PQC signature if available
+        pqc_signature = None
+        pqc_algorithm = None
+        if PQC_AVAILABLE and self.derived_keys and self.derived_keys.pqc_dilithium_keys:
+            try:
+                # Sign the message payload (ciphertext + HMAC tag)
+                message_to_sign = ciphertext + hmac_tag + aad
+                signature_obj = pqc_service.sign_message(message_to_sign, self.derived_keys.pqc_dilithium_keys.private_key)
+                pqc_signature = signature_obj.signature
+                pqc_algorithm = signature_obj.algorithm
+                logger.debug(f"Added PQC signature to message: {len(pqc_signature)} bytes using {pqc_algorithm}")
+            except Exception as e:
+                logger.warning(f"Failed to add PQC signature to message: {e}")
+        
         return EncryptedMessage(
             ciphertext=ciphertext,
             hmac_tag=hmac_tag,
             seq_no=seq_no,
             timestamp=timestamp,
-            session_id=self.session_id
+            session_id=self.session_id,
+            pqc_signature=pqc_signature,
+            pqc_algorithm=pqc_algorithm
         )
     
     def decrypt_message_otp(self, encrypted_msg: EncryptedMessage) -> str:
@@ -257,6 +274,26 @@ class CryptoService:
         
         if not hmac.compare_digest(encrypted_msg.hmac_tag, expected_hmac):
             raise ValueError("HMAC verification failed - message may be tampered")
+        
+        # Verify PQC signature if present
+        if encrypted_msg.pqc_signature and PQC_AVAILABLE and self.derived_keys and self.derived_keys.pqc_dilithium_keys:
+            try:
+                # Recreate the message that was signed
+                message_to_verify = encrypted_msg.ciphertext + encrypted_msg.hmac_tag + aad
+                is_valid = pqc_service.verify_signature(
+                    encrypted_msg.pqc_signature,
+                    message_to_verify,
+                    self.derived_keys.pqc_dilithium_keys.public_key
+                )
+                if not is_valid:
+                    logger.warning(f"PQC signature verification failed for message seq_no={encrypted_msg.seq_no}")
+                    raise ValueError("PQC signature verification failed - message authenticity cannot be verified")
+                logger.debug(f"PQC signature verified successfully for message seq_no={encrypted_msg.seq_no}")
+            except Exception as e:
+                logger.error(f"Error verifying PQC signature: {e}")
+                raise ValueError(f"PQC signature verification error: {str(e)}")
+        elif encrypted_msg.pqc_signature:
+            logger.warning("PQC signature present but PQC keys not available for verification")
         
         # Regenerate key stream for this sequence number without recording usage (decryption)
         key_stream = self._generate_key_stream(len(encrypted_msg.ciphertext), encrypted_msg.seq_no, record_usage=False)

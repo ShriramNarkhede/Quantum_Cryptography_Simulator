@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter&wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* Quantum Laboratory Global Theme */
 
@@ -7,35 +7,66 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f6f7fb;
-  --card-surface: rgba(255, 255, 255, 0.92);
-  --card-border: rgba(15, 23, 42, 0.06);
-  --card-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-  --text-primary: #0b1120;
-  --text-secondary: #1e293b;
-  --text-muted: #64748b;
-  --alice: #00d4ff;
-  --bob: #a855f7;
-  --eve: #ef4444;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --info: #3b82f6;
-  --backdrop: rgba(15, 23, 42, 0.08);
+  /* iOS-inspired System Colors */
+  --system-blue: #007AFF;
+  --system-red: #FF3B30;
+  --system-green: #34C759;
+  --system-indigo: #5856D6;
+  --system-orange: #FF9500;
+  --system-cyan: #32ADE6;
+  --system-gray: #8E8E93;
+  --system-gray2: #AEAEB2;
+  --system-gray3: #C7C7CC;
+  --system-gray4: #D1D1D6;
+  --system-gray5: #E5E5EA;
+  --system-gray6: #F2F2F7;
+
+  /* Project Semantics */
+  --bg-primary: #F2F2F7; /* iOS grouped background light */
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #FFFFFF;
+  
+  --card-surface: rgba(255, 255, 255, 0.72);
+  --card-border: rgba(255, 255, 255, 0.4);
+  --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  --card-inner-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.6);
+  
+  --text-primary: #000000;
+  --text-secondary: #3C3C43; /* iOS Label Secondary */
+  --text-muted: #3C3C4399;   /* iOS Label Tertiary */
+
+  /* Identities */
+  --alice: var(--system-cyan);
+  --bob: var(--system-indigo);
+  --eve: var(--system-red);
+  --success: var(--system-green);
+  --warning: var(--system-orange);
+  --info: var(--system-blue);
+
+  --backdrop: rgba(0, 0, 0, 0.2);
+  
+  /* Glass Materials */
+  --glass-thin: blur(10px) saturate(180%);
+  --glass-regular: blur(20px) saturate(180%);
+  --glass-thick: blur(30px) saturate(180%);
+  --glass-heavy: blur(50px) saturate(180%);
 }
 
 [data-theme='dark'] {
-  --bg-primary: #0a0e27;
-  --bg-secondary: #151b3d;
-  --bg-tertiary: #1e2749;
-  --card-surface: rgba(17, 24, 61, 0.75);
-  --card-border: rgba(255, 255, 255, 0.08);
-  --card-shadow: 0 25px 55px rgba(3, 6, 23, 0.6);
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5f5;
-  --text-muted: #94a3b8;
-  --backdrop: rgba(0, 0, 0, 0.35);
+  --bg-primary: #000000;
+  --bg-secondary: #1C1C1E;
+  --bg-tertiary: #2C2C2E;
+
+  --card-surface: rgba(30, 30, 30, 0.65);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --card-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --card-inner-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.15);
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #EBEBF599; /* iOS Dark Label Secondary */
+  --text-muted: #EBEBF54D;     /* iOS Dark Label Tertiary */
+  
+  --backdrop: rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -62,10 +93,12 @@ code,
 .quantum-lab {
   position: relative;
   min-height: 100vh;
-  background: radial-gradient(circle at top, rgba(148, 163, 184, 0.12), transparent 45%),
-              radial-gradient(circle at 20% 20%, rgba(226, 232, 240, 0.4), transparent 35%),
-              radial-gradient(circle at 80% 0%, rgba(148, 163, 184, 0.12), transparent 30%),
-              linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+  /* Rich, vivid gradients for glass backdrop */
+  background: 
+    radial-gradient(circle at 10% 20%, rgba(50, 173, 230, 0.25), transparent 40%),
+    radial-gradient(circle at 90% 10%, rgba(88, 86, 214, 0.25), transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(255, 59, 48, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--bg-primary), var(--bg-tertiary));
   overflow: hidden;
 }
 
@@ -128,20 +161,39 @@ code,
   margin: 0 auto;
 }
 
+/* iOS Glass Card - The core component */
 .glass-card {
   background: var(--card-surface);
-  border: 1px solid var(--card-border);
-  border-radius: 1.35rem;
-  padding: clamp(1.25rem, 3vw, 1.75rem);
+  backdrop-filter: var(--glass-regular);
+  -webkit-backdrop-filter: var(--glass-regular);
+  border-radius: 24px; /* iOS large curve */
+  padding: 24px;
   box-shadow: var(--card-shadow);
-  backdrop-filter: blur(20px);
-  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  border: none; /* Removed physical border in favor of inner shadow */
+  box-shadow: var(--card-shadow), var(--card-inner-shadow);
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s ease;
 }
 
 .glass-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.14);
-  border-color: rgba(0, 0, 0, 0.05);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.12), var(--card-inner-shadow);
+}
+
+/* Material Utilities */
+.material-thin {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: var(--glass-thin);
+  -webkit-backdrop-filter: var(--glass-thin);
+}
+
+.material-thick {
+  background: var(--card-surface);
+  backdrop-filter: var(--glass-thick);
+  -webkit-backdrop-filter: var(--glass-thick);
+}
+
+[data-theme='dark'] .material-thin {
+  background: rgba(40, 40, 40, 0.45);
 }
 
 .glow-border {
@@ -790,14 +842,6 @@ code,
     transition-duration: 0.01s !important;
   }
 }
-
-/* Quantum Laboratory Global Theme */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 :root {
   color-scheme: light;

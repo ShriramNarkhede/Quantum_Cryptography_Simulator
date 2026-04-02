@@ -13,7 +13,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
+
   // Form states
   const [sessionId, setSessionId] = useState('');
   const [selectedRole, setSelectedRole] = useState<'alice' | 'bob' | 'eve'>('alice');
@@ -37,10 +37,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
       // Create new session
       const sessionData = await apiService.createSession();
       setSuccess(`Session created! ID: ${sessionData.session_id}`);
-      
+
       // Automatically join as Alice
       const userData = await apiService.joinSession(sessionData.session_id, 'alice');
-      
+
       // Prepare session and user objects
       const session: Session = {
         session_id: sessionData.session_id,
@@ -83,7 +83,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
       // First check if session exists
       const sessionStatus = await apiService.getSessionStatus(sessionId);
       const participants = sessionStatus.participants ?? [];
-      
+
       // Check if role is already taken
       const existingRole = participants.find(p => p.role === selectedRole);
       if (existingRole) {
@@ -94,7 +94,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
 
       // Join session
       const userData = await apiService.joinSession(sessionId, selectedRole);
-      
+
       // Prepare session and user objects
       const session: Session = {
         session_id: sessionStatus.session_id,
@@ -145,7 +145,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
   return (
     <div className="max-w-2xl mx-auto">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Cryptex</h2>
+        <h2 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Welcome to Cryptex</h2>
         <p className="text-gray-600">
           Create a new quantum key distribution session or join an existing one
         </p>
@@ -156,7 +156,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Create Session Card */}
-            <div 
+            <div
               className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-transparent hover:border-blue-200 cursor-pointer transition-all"
               onClick={() => setMode('create')}
             >
@@ -170,7 +170,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
             </div>
 
             {/* Join Session Card */}
-            <div 
+            <div
               className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border-2 border-transparent hover:border-green-200 cursor-pointer transition-all"
               onClick={() => setMode('join')}
             >
@@ -275,11 +275,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
               <div className="grid grid-cols-3 gap-2">
                 {/* Alice */}
                 <div
-                  className={`p-3 rounded-lg cursor-pointer border-2 transition-all ${
-                    selectedRole === 'alice'
-                      ? 'border-alice bg-green-50'
-                      : 'border-gray-200 hover:border-green-300'
-                  }`}
+                  className={`p-3 rounded-lg cursor-pointer border-2 transition-all ${selectedRole === 'alice'
+                    ? 'border-alice bg-green-50'
+                    : 'border-gray-200 hover:border-green-300'
+                    }`}
                   onClick={() => setSelectedRole('alice')}
                 >
                   <div className="text-center">
@@ -290,11 +289,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
 
                 {/* Bob */}
                 <div
-                  className={`p-3 rounded-lg cursor-pointer border-2 transition-all ${
-                    selectedRole === 'bob'
-                      ? 'border-bob bg-blue-50'
-                      : 'border-gray-200 hover:border-blue-300'
-                  }`}
+                  className={`p-3 rounded-lg cursor-pointer border-2 transition-all ${selectedRole === 'bob'
+                    ? 'border-bob bg-blue-50'
+                    : 'border-gray-200 hover:border-blue-300'
+                    }`}
                   onClick={() => setSelectedRole('bob')}
                 >
                   <div className="text-center">
@@ -305,11 +303,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onSessionJoin, serverOn
 
                 {/* Eve */}
                 <div
-                  className={`p-3 rounded-lg cursor-pointer border-2 transition-all ${
-                    selectedRole === 'eve'
-                      ? 'border-eve bg-red-50'
-                      : 'border-gray-200 hover:border-red-300'
-                  }`}
+                  className={`p-3 rounded-lg cursor-pointer border-2 transition-all ${selectedRole === 'eve'
+                    ? 'border-eve bg-red-50'
+                    : 'border-gray-200 hover:border-red-300'
+                    }`}
                   onClick={() => setSelectedRole('eve')}
                 >
                   <div className="text-center">

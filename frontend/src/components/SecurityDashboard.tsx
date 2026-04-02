@@ -1,7 +1,7 @@
 // src/components/SecurityDashboard.tsx
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Shield, AlertTriangle, Activity, TrendingUp, CheckCircle } from 'lucide-react';
+import { Shield, AlertTriangle, Activity, TrendingUp, CheckCircle, Lock } from 'lucide-react';
 import type { CryptoInfo, QBERDataPoint, SessionHealthAssessment, SecurityViolation } from '../types';
 
 interface SecurityDashboardProps {
@@ -27,50 +27,54 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
 
   // Health score color
   const getHealthColor = (score: number) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 70) return 'text-blue-600';
-    if (score >= 50) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 90) return 'text-[var(--system-green)]';
+    if (score >= 70) return 'text-[var(--system-blue)]';
+    if (score >= 50) return 'text-[var(--system-orange)]';
+    return 'text-[var(--system-red)]';
   };
 
   const getHealthBgColor = (score: number) => {
-    if (score >= 90) return 'bg-green-500/10 border border-green-400/30';
-    if (score >= 70) return 'bg-blue-500/10 border border-blue-400/30';
-    if (score >= 50) return 'bg-yellow-500/10 border border-yellow-400/30';
-    return 'bg-red-500/10 border border-red-400/30';
+    // Using subtle iOS-style fills
+    if (score >= 90) return 'bg-green-500/10 text-green-700';
+    if (score >= 70) return 'bg-blue-500/10 text-blue-700';
+    if (score >= 50) return 'bg-orange-500/10 text-orange-700';
+    return 'bg-red-500/10 text-red-700';
   };
 
   // Risk level colors
   const getRiskColor = (risk: SessionHealthAssessment['risk_level']) => {
     switch (risk) {
-      case 'MINIMAL': return 'text-green-300 bg-green-500/15 border border-green-400/30';
-      case 'LOW': return 'text-blue-300 bg-blue-500/15 border border-blue-400/30';
-      case 'MEDIUM': return 'text-yellow-300 bg-yellow-500/15 border border-yellow-400/30';
-      case 'HIGH': return 'text-orange-300 bg-orange-500/15 border border-orange-400/30';
-      case 'CRITICAL': return 'text-red-300 bg-red-500/15 border border-red-400/30';
-      default: return 'text-[var(--text-secondary)] bg-white/10 border border-white/20';
+      case 'MINIMAL': return 'text-green-700 bg-green-500/15 border-green-200';
+      case 'LOW': return 'text-blue-700 bg-blue-500/15 border-blue-200';
+      case 'MEDIUM': return 'text-orange-700 bg-orange-500/15 border-orange-200';
+      case 'HIGH': return 'text-red-700 bg-red-500/15 border-red-200';
+      case 'CRITICAL': return 'text-red-800 bg-red-100 border-red-300';
+      default: return 'text-gray-600 bg-gray-100 border-gray-200';
     }
   };
 
   // Security metrics for pie chart
   const securityMetrics = cryptoInfo ? [
-    { name: 'Secure Messages', value: cryptoInfo.crypto_stats.message_count, color: '#10b981' },
-    { name: 'Encrypted Files', value: cryptoInfo.crypto_stats.file_count, color: '#3b82f6' },
-    { name: 'Key Stream Used', value: Math.floor(cryptoInfo.crypto_stats.total_key_stream_bytes / 1024), color: '#8b5cf6' },
+    { name: 'Secure Messages', value: cryptoInfo.crypto_stats.message_count, color: 'var(--system-green)' },
+    { name: 'Encrypted Files', value: cryptoInfo.crypto_stats.file_count, color: 'var(--system-blue)' },
+    { name: 'Key Stream Used', value: Math.floor(cryptoInfo.crypto_stats.total_key_stream_bytes / 1024), color: 'var(--system-indigo)' },
   ] : [];
 
-  const surfaceStyle = { background: 'var(--card-surface)', borderColor: 'var(--card-border)' };
-  const subtleSurfaceStyle = { background: 'var(--bg-secondary)', borderColor: 'var(--card-border)' };
-
   return (
-    <div className="glass-card glow-border space-y-6">
-      <div className="flex items-center justify-between pb-2 border-b border-[var(--card-border)]">
-        <div className="flex items-center gap-2">
-          <Shield className="w-6 h-6 text-[var(--info)]" />
-          <h2 className="text-xl font-semibold text-[var(--text-primary)]">Security Dashboard</h2>
+    <div className="glass-card space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-4 border-b border-[var(--card-border)]">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-[var(--system-blue)]/10 rounded-full">
+            <Shield className="w-6 h-6 text-[var(--system-blue)]" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Security Dashboard</h2>
+            <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wider font-semibold opacity-70">Real-time Threat Monitoring</p>
+          </div>
         </div>
-        <div className={`px-3 py-1 rounded-full text-sm font-medium ${getRiskColor(sessionHealth.risk_level)}`}>
-          Risk: {sessionHealth.risk_level}
+        <div className={`px-4 py-1.5 rounded-full text-xs font-bold tracking-wide border ${getRiskColor(sessionHealth.risk_level)}`}>
+          RISK: {sessionHealth.risk_level}
         </div>
       </div>
 
@@ -78,56 +82,58 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
         {/* Health Score and Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Health Score */}
-          <div className={`p-4 rounded-lg border ${getHealthBgColor(sessionHealth.score)}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-[var(--text-secondary)]">Session Health</h3>
-                <div className={`text-3xl font-bold ${getHealthColor(sessionHealth.score)}`}>
-                  {sessionHealth.score.toFixed(0)}
-                </div>
-                <div className="text-xs text-[var(--text-muted)]">out of 100</div>
+          <div className="p-5 rounded-2xl material-thin border border-[var(--card-border)] shadow-sm backdrop-blur-md">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide">Session Health</h3>
+              <Activity className={`w-5 h-5 ${getHealthColor(sessionHealth.score)}`} />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <div className={`text-4xl font-bold tracking-tighter ${getHealthColor(sessionHealth.score)}`}>
+                {sessionHealth.score.toFixed(0)}
               </div>
-              <Activity className={`w-8 h-8 ${getHealthColor(sessionHealth.score)}`} />
+              <div className="text-sm text-[var(--text-muted)] font-medium">/ 100</div>
+            </div>
+            <div className="mt-3 h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${getHealthBgColor(sessionHealth.score).split(' ')[0].replace('/10', '')}`}
+                style={{ width: `${sessionHealth.score}%` }}
+              />
             </div>
           </div>
 
           {/* QBER Status */}
-          <div className="p-4 rounded-lg border" style={surfaceStyle}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-[var(--text-secondary)]">Current QBER</h3>
-                <div className={`text-3xl font-bold ${
-                  cryptoInfo?.qber && cryptoInfo.qber > cryptoInfo.qber_threshold 
-                    ? 'text-red-500' : 'text-[var(--info)]'
+          <div className="p-5 rounded-2xl material-thin border border-[var(--card-border)] shadow-sm backdrop-blur-md">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide">Current QBER</h3>
+              <TrendingUp className={`w-5 h-5 ${cryptoInfo?.qber && cryptoInfo.qber > cryptoInfo.qber_threshold
+                  ? 'text-[var(--system-red)]' : 'text-[var(--system-green)]'
+                }`} />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <div className={`text-4xl font-bold tracking-tighter ${cryptoInfo?.qber && cryptoInfo.qber > cryptoInfo.qber_threshold
+                  ? 'text-[var(--system-red)]' : 'text-[var(--system-cyan)]'
                 }`}>
-                  {cryptoInfo?.qber ? `${(cryptoInfo.qber * 100).toFixed(1)}%` : '0.0%'}
-                </div>
-                <div className="text-xs text-[var(--text-muted)]">
-                  Threshold: {cryptoInfo ? (cryptoInfo.qber_threshold * 100).toFixed(1) : '11.0'}%
-                </div>
+                {cryptoInfo?.qber ? `${(cryptoInfo.qber * 100).toFixed(1)}%` : '0.0%'}
               </div>
-              <TrendingUp className={`w-8 h-8 ${
-                cryptoInfo?.qber && cryptoInfo.qber > cryptoInfo.qber_threshold 
-                  ? 'text-red-500' : 'text-[var(--info)]'
-              }`} />
+            </div>
+            <div className="mt-1 text-xs text-[var(--text-muted)] font-medium">
+              Threshold Limit: <span className="text-[var(--text-primary)]">{cryptoInfo ? (cryptoInfo.qber_threshold * 100).toFixed(1) : '11.0'}%</span>
             </div>
           </div>
 
           {/* Security Violations */}
-          <div className="p-4 rounded-lg border" style={surfaceStyle}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-[var(--text-secondary)]">Violations</h3>
-                <div className={`text-3xl font-bold ${
-                  securityViolations.length > 0 ? 'text-red-600' : 'text-green-600'
-                }`}>
-                  {securityViolations.length}
-                </div>
-                <div className="text-xs text-[var(--text-muted)]">security incidents</div>
-              </div>
-              <AlertTriangle className={`w-8 h-8 ${
-                securityViolations.length > 0 ? 'text-red-600' : 'text-green-600'
-              }`} />
+          <div className="p-5 rounded-2xl material-thin border border-[var(--card-border)] shadow-sm backdrop-blur-md">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide">Violations</h3>
+              <AlertTriangle className={`w-5 h-5 ${securityViolations.length > 0 ? 'text-[var(--system-red)]' : 'text-[var(--system-green)]'
+                }`} />
+            </div>
+            <div className={`text-4xl font-bold tracking-tighter ${securityViolations.length > 0 ? 'text-[var(--system-red)]' : 'text-[var(--system-green)]'
+              }`}>
+              {securityViolations.length}
+            </div>
+            <div className="mt-1 text-xs text-[var(--text-muted)] font-medium">
+              Incidents Recorded
             </div>
           </div>
         </div>
@@ -135,50 +141,68 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* QBER Trend Chart */}
-          <div className="p-4 border rounded-lg" style={surfaceStyle}>
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">QBER Trend</h3>
+          <div className="p-6 rounded-2xl material-thin border border-[var(--card-border)] shadow-sm">
+            <h3 className="text-base font-bold text-[var(--text-primary)] mb-6">QBER Trend Analysis</h3>
             {qberChartData.length > 0 ? (
-              <div className="h-64">
+              <div className="h-64 -ml-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={qberChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="index" />
-                    <YAxis domain={[0, Math.max(15, Math.max(...qberChartData.map(d => d.qber)) * 1.2)]} />
-                    <Tooltip 
+                    <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.1} />
+                    <XAxis dataKey="index" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis
+                      stroke="var(--text-muted)"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      domain={[0, Math.max(15, Math.max(...qberChartData.map(d => d.qber)) * 1.2)]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderColor: 'var(--card-border)',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                      }}
+                      itemStyle={{ color: 'var(--text-primary)' }}
+                      labelStyle={{ color: 'var(--text-secondary)' }}
                       formatter={(value: number, name: string) => [
-                        `${value.toFixed(2)}%`, 
+                        `${value.toFixed(2)}%`,
                         name === 'qber' ? 'QBER' : 'Threshold'
                       ]}
                       labelFormatter={(index) => `Measurement ${index + 1}`}
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="qber" 
-                      stroke="#3b82f6" 
-                      strokeWidth={2}
+                    <Line
+                      type="monotone"
+                      dataKey="qber"
+                      stroke="var(--system-blue)"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={{ r: 6, strokeWidth: 0 }}
                       name="qber"
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="threshold" 
-                      stroke="#f59e0b" 
-                      strokeDasharray="5 5"
+                    <Line
+                      type="monotone"
+                      dataKey="threshold"
+                      stroke="var(--system-orange)"
+                      strokeDasharray="4 4"
                       strokeWidth={2}
+                      dot={false}
                       name="threshold"
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-64 flex items-center justify-center text-[var(--text-muted)]">
-                No QBER data available
+              <div className="h-64 flex flex-col items-center justify-center text-[var(--text-muted)] gap-3 bg-[var(--bg-primary)]/30 rounded-xl border border-dashed border-gray-300">
+                <Activity className="w-8 h-8 opacity-40" />
+                <span className="text-sm">No QBER data available</span>
               </div>
             )}
           </div>
 
           {/* Crypto Usage Chart */}
-          <div className="p-4 border rounded-lg" style={surfaceStyle}>
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Crypto Usage</h3>
+          <div className="p-6 rounded-2xl material-thin border border-[var(--card-border)] shadow-sm">
+            <h3 className="text-base font-bold text-[var(--text-primary)] mb-6">Cryptographic Breakdown</h3>
             {securityMetrics.length > 0 && securityMetrics.some(m => m.value > 0) ? (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -187,21 +211,31 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
                       data={securityMetrics}
                       cx="50%"
                       cy="50%"
+                      innerRadius={60}
                       outerRadius={80}
+                      paddingAngle={5}
                       dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
+                      label={({ name, value }) => `${name}`} // Simplified label
                     >
                       {securityMetrics.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--bg-secondary)',
+                        borderColor: 'var(--card-border)',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-64 flex items-center justify-center text-[var(--text-muted)]">
-                No crypto operations yet
+              <div className="h-64 flex flex-col items-center justify-center text-[var(--text-muted)] gap-3 bg-[var(--bg-primary)]/30 rounded-xl border border-dashed border-gray-300">
+                <Lock className="w-8 h-8 opacity-40" />
+                <span className="text-sm">No crypto operations yet</span>
               </div>
             )}
           </div>
@@ -210,49 +244,65 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
         {/* Security Issues and Recommendations */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Current Issues */}
-          <div className="p-4 border rounded-lg" style={surfaceStyle}>
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Current Issues</h3>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
+          <div className="p-5 rounded-2xl material-thin border border-[var(--card-border)] shadow-sm">
+            <h3 className="text-base font-bold text-[var(--text-primary)] mb-4">Detected Vulnerabilities</h3>
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
               {sessionHealth.issues.length > 0 ? (
                 sessionHealth.issues.map((issue, index) => (
-                  <div key={index} className="flex items-start space-x-2">
-                    <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm text-[var(--text-secondary)]">{issue}</span>
+                  <div key={index} className="flex items-start gap-3 p-3 rounded-xl bg-orange-50 border border-orange-100/50">
+                    <AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-800 font-medium leading-tight">{issue}</span>
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-green-500">No issues detected</div>
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div className="text-sm font-medium text-green-700">All systems secure</div>
+                  <div className="text-xs text-green-600/70 mt-1">No vulnerabilities detected</div>
+                </div>
               )}
             </div>
           </div>
 
           {/* Recommendations */}
-          <div className="p-4 border rounded-lg" style={surfaceStyle}>
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Recommendations</h3>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
+          <div className="p-5 rounded-2xl material-thin border border-[var(--card-border)] shadow-sm">
+            <h3 className="text-base font-bold text-[var(--text-primary)] mb-4">Security Recommendations</h3>
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
               {sessionHealth.recommendations.length > 0 ? (
                 sessionHealth.recommendations.map((rec, index) => (
-                  <div key={index} className="flex items-start space-x-2">
-                    <CheckCircle className="w-4 h-4 text-[var(--info)] mt-0.5 flex-shrink-0" />
-                    <span className="text-sm text-[var(--text-secondary)]">{rec}</span>
+                  <div key={index} className="flex items-start gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100/50">
+                    <div className="mt-0.5 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[10px] text-blue-600 font-bold">{index + 1}</span>
+                    </div>
+                    <span className="text-sm text-gray-800 font-medium leading-tight">{rec}</span>
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-[var(--info)]">No recommendations needed</div>
+                <div className="flex flex-col items-center justify-center py-8 text-center opacity-70">
+                  <CheckCircle className="w-8 h-8 text-[var(--system-blue)] mb-2" />
+                  <div className="text-sm font-medium text-[var(--text-secondary)]">Optimization complete</div>
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Recent Security Violations */}
+        {/* Recent Security Violations Table */}
         {securityViolations.length > 0 && (
-          <div className="p-4 border rounded-lg" style={surfaceStyle}>
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Recent Security Violations</h3>
-            <div className="space-y-2 max-h-32 overflow-y-auto">
+          <div className="rounded-2xl overflow-hidden border border-[var(--card-border)]">
+            <div className="bg-gray-50/50 p-4 border-b border-gray-100">
+              <h3 className="text-base font-bold text-[var(--text-primary)]">Security Incident Log</h3>
+            </div>
+            <div className="divide-y divide-gray-100/50 bg-white/40 backdrop-blur-sm">
               {securityViolations.slice(-5).reverse().map((violation, index) => (
-                <div key={index} className="flex items-start justify-between p-2 rounded text-sm bg-red-500/10 border border-red-400/30">
-                  <span className="text-red-200">{violation.violation}</span>
-                  <span className="text-red-300 text-xs">
+                <div key={index} className="flex items-center justify-between p-4 hover:bg-white/60 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                    <span className="text-sm font-medium text-red-900">{violation.violation}</span>
+                  </div>
+                  <span className="text-xs font-mono text-[var(--text-muted)] bg-gray-100 px-2 py-1 rounded-md">
                     {new Date(violation.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
@@ -261,28 +311,28 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
           </div>
         )}
 
-        {/* Crypto Details */}
+        {/* Crypto Details Footer */}
         {cryptoInfo && (
-          <div className="p-4 border rounded-lg" style={subtleSurfaceStyle}>
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-4">Cryptographic Details</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <div className="text-[var(--text-muted)]">Mode</div>
-                <div className="font-medium text-[var(--text-primary)]">
+          <div className="p-4 rounded-xl bg-[var(--bg-primary)]/50 border border-[var(--card-border)] backdrop-blur-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Encryption Mode</div>
+                <div className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
                   {cryptoInfo.hybrid_mode ? 'Hybrid (BB84+PQC)' : 'Pure BB84'}
                 </div>
               </div>
-              <div>
-                <div className="text-[var(--text-muted)]">Key Length</div>
-                <div className="font-medium text-[var(--text-primary)]">{cryptoInfo.final_key_length} bytes</div>
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Key Length</div>
+                <div className="font-mono font-medium text-[var(--text-primary)]">{cryptoInfo.final_key_length} bytes</div>
               </div>
-              <div>
-                <div className="text-[var(--text-muted)]">Messages</div>
-                <div className="font-medium text-[var(--text-primary)]">{cryptoInfo.crypto_stats.message_count}</div>
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Messages Processed</div>
+                <div className="font-mono font-medium text-[var(--text-primary)]">{cryptoInfo.crypto_stats.message_count}</div>
               </div>
-              <div>
-                <div className="text-[var(--text-muted)]">Files</div>
-                <div className="font-medium text-[var(--text-primary)]">{cryptoInfo.crypto_stats.file_count}</div>
+              <div className="space-y-1">
+                <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Files Secured</div>
+                <div className="font-mono font-medium text-[var(--text-primary)]">{cryptoInfo.crypto_stats.file_count}</div>
               </div>
             </div>
           </div>
@@ -292,4 +342,4 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
   );
 };
 
-export default SecurityDashboard ;
+export default SecurityDashboard;

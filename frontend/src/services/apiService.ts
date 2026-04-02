@@ -2,8 +2,8 @@
  * Enhanced REST API service for BB84 QKD simulation with cryptographic features
  */
 
-import axios,{ type AxiosInstance,type AxiosResponse, type AxiosError } from 'axios';
-import type{ 
+import axios, { type AxiosInstance, type AxiosResponse, type AxiosError } from 'axios';
+import type {
   CreateSessionResponse,
   JoinSessionResponse,
   SessionStatusResponse,
@@ -16,7 +16,7 @@ import type{
 
 class ApiService {
   private api: AxiosInstance;
-  private baseURL = 'http://localhost:8000';
+  private baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   private requestCount = 0;
   private lastRequestTime = 0;
 
@@ -44,12 +44,12 @@ class ApiService {
       (config) => {
         this.requestCount++;
         this.lastRequestTime = Date.now();
-        
+
         console.log(`[API] ${config.method?.toUpperCase()} ${config.url} (Request #${this.requestCount})`);
-        
+
         // Add request timing
         config.metadata = { startTime: Date.now() };
-        
+
         return config;
       },
       (err: unknown) => {
@@ -63,7 +63,7 @@ class ApiService {
       (response) => {
         const duration = Date.now() - (response.config.metadata?.startTime || 0);
         console.log(`[API] ${response.status} ${response.config.url} (${duration}ms)`);
-        
+
         return response;
       },
       (err: unknown) => {
@@ -144,13 +144,13 @@ class ApiService {
 
   // Enhanced file operations with encryption
   async sendEncryptedFile(
-    sessionId: string, 
-    senderId: string, 
+    sessionId: string,
+    senderId: string,
     file: File
   ): Promise<FileUploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const response = await this.api.post(
       `/session/${sessionId}/send_file`,
       formData,
@@ -208,7 +208,7 @@ class ApiService {
     data?: any;
     params?: any;
   }>): Promise<T[]> {
-    const promises = requests.map(req => 
+    const promises = requests.map(req =>
       this.api.request({
         method: req.method,
         url: req.url,
@@ -218,7 +218,7 @@ class ApiService {
     );
 
     const responses = await Promise.allSettled(promises);
-    return responses.map(result => 
+    return responses.map(result =>
       result.status === 'fulfilled' ? result.value.data : null
     );
   }
@@ -278,7 +278,7 @@ class ApiService {
 
   getErrorSeverity(error: any): 'low' | 'medium' | 'high' | 'critical' {
     if (!error.response) return 'high'; // Network errors are high severity
-    
+
     const status = error.response.status;
     if (status >= 500) return 'critical';
     if (status >= 400 && status < 500) return 'medium';
@@ -305,7 +305,7 @@ class ApiService {
       } catch (error) {
         console.log(`Server check attempt ${i + 1}/${maxAttempts} failed`);
       }
-      
+
       if (i < maxAttempts - 1) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -333,7 +333,7 @@ class ApiService {
       if (typeof window !== 'undefined') {
         localStorage.setItem('auth_token', token);
       }
-    } catch {}
+    } catch { }
   }
 
   removeAuthToken(): void {
@@ -342,7 +342,7 @@ class ApiService {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token');
       }
-    } catch {}
+    } catch { }
   }
 
   // Request statistics
@@ -508,9 +508,9 @@ class ApiService {
         return await request();
       } catch (err: unknown) {
         lastError = err;
-        
+
         if (i === maxRetries) break;
-        
+
         // Don't retry on client errors (4xx)
         if (axios.isAxiosError(err) && err.response?.status !== undefined && err.response.status >= 400 && err.response.status < 500) {
           break;

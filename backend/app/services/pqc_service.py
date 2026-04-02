@@ -5,20 +5,22 @@ Implements NIST-approved PQC algorithms: Kyber (KEM) and Dilithium (Signatures)
 
 import secrets
 import logging
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, List
 from dataclasses import dataclass
 import hashlib
 
-# Try to import liboqs (primary PQC library)
+# Try to import liboqs (primary PQC library). Some builds of liboqs-python try
+# to auto-clone shared libraries and may raise RuntimeError if the bundled
+# revision is unavailable. Treat any failure as "not available" and continue.
 try:
-    import oqs
+    import oqs  # type: ignore
     LIBOQS_AVAILABLE = True
     logger = logging.getLogger(__name__)
     logger.info("liboqs-python available - using NIST-approved PQC algorithms")
-except ImportError:
+except (ImportError, RuntimeError) as exc:
     LIBOQS_AVAILABLE = False
     logger = logging.getLogger(__name__)
-    logger.warning("liboqs-python not available - falling back to demo PQC")
+    logger.warning(f"liboqs-python unavailable ({exc}); falling back to demo/PQCrypto")
 
 # Fallback to pure Python implementations
 try:
@@ -64,12 +66,29 @@ class DilithiumSignature:
     algorithm: str = "Dilithium2"
 
 
+@dataclass
+class SPHINCSKeyPair:
+    """SPHINCS+ signature key pair (stateless hash-based signatures)"""
+    public_key: bytes
+    private_key: bytes
+    algorithm: str = "SPHINCS+-SHA256-128f-simple"  # NIST security level 1
+
+
+@dataclass
+class SPHINCSSignature:
+    """SPHINCS+ signature"""
+    signature: bytes
+    message: bytes
+    algorithm: str = "SPHINCS+-SHA256-128f-simple"
+
+
 class PQCService:
     """Post-Quantum Cryptography service using NIST-approved algorithms"""
     
     def __init__(self):
         self.kyber_algorithm = "Kyber512"  # NIST security level 1
         self.dilithium_algorithm = "Dilithium2"  # NIST security level 2
+        self.sphincs_algorithm = "SPHINCS+-SHA256-128f-simple"  # NIST security level 1 (stateless)
         self.fallback_mode = not LIBOQS_AVAILABLE
         
         if self.fallback_mode:
@@ -438,12 +457,24 @@ class PQCService:
     
     def get_pqc_info(self) -> Dict[str, Any]:
         """Get information about PQC capabilities"""
+        # Get available algorithms from liboqs if available
+        available_algorithms = {}
+        if LIBOQS_AVAILABLE:
+            try:
+                available_algorithms = {
+                    "kem_algorithms": oqs.get_enabled_kem_mechanisms(),
+                    "signature_algorithms": oqs.get_enabled_sig_mechanisms()
+                }
+            except Exception as e:
+                logger.warning(f"Could not get available algorithms: {e}")
+        
         return {
             "liboqs_available": LIBOQS_AVAILABLE,
             "pqcrypto_available": PQCRYPTO_AVAILABLE,
             "fallback_mode": self.fallback_mode,
             "kyber_algorithm": self.kyber_algorithm,
             "dilithium_algorithm": self.dilithium_algorithm,
+            "available_algorithms": available_algorithms,
             "kyber_key_sizes": {
                 "public_key": 800 if not self.fallback_mode else 800,
                 "private_key": 1632 if not self.fallback_mode else 1632,
@@ -454,8 +485,162 @@ class PQCService:
                 "public_key": 1312 if not self.fallback_mode else 1312,
                 "private_key": 2528 if not self.fallback_mode else 2528,
                 "signature": 2420 if not self.fallback_mode else 2420
+            },
+            "nist_security_levels": {
+                "kyber": "Level 1 (128-bit security)",
+                "dilithium": "Level 2 (128-bit security)"
             }
         }
+    
+    def generate_sphincs_keypair(self) -> SPHINCSKeyPair:
+        """
+        Generate SPHINCS+ signature key pair (stateless hash-based signatures)
+        
+        Returns:
+            SPHINCSKeyPair with public and private keys
+        """
+        if LIBOQS_AVAILABLE:
+            return self._generate_sphincs_liboqs()
+        else:
+            return self._generate_sphincs_demo()
+    
+    def _generate_sphincs_liboqs(self) -> SPHINCSKeyPair:
+        """Generate SPHINCS+ key pair using liboqs"""
+        try:
+            with oqs.Signature(self.sphincs_algorithm) as sig:
+                public_key, private_key = sig.generate_keypair()
+                
+                logger.debug(f"Generated SPHINCS+ key pair: pub={len(public_key)} bytes, priv={len(private_key)} bytes")
+                
+                return SPHINCSKeyPair(
+                    public_key=public_key,
+                    private_key=private_key,
+                    algorithm=self.sphincs_algorithm
+                )
+        except Exception as e:
+            logger.error(f"Error generating SPHINCS+ key pair with liboqs: {e}")
+            return self._generate_sphincs_demo()
+    
+    def _generate_sphincs_demo(self) -> SPHINCSKeyPair:
+        """Generate demo SPHINCS+ key pair (fallback)"""
+        # Generate random keys for demo purposes
+        public_key = secrets.token_bytes(32)  # Approximate SPHINCS+ public key size
+        private_key = secrets.token_bytes(64)  # Approximate SPHINCS+ private key size
+        
+        logger.warning("Using demo SPHINCS+ key pair - not cryptographically secure")
+        
+        return SPHINCSKeyPair(
+            public_key=public_key,
+            private_key=private_key,
+            algorithm="Demo-SPHINCS+"
+        )
+    
+    def sign_message_sphincs(self, message: bytes, private_key: bytes) -> SPHINCSSignature:
+        """
+        Sign a message using SPHINCS+
+        
+        Args:
+            message: Message to sign
+            private_key: SPHINCS+ private key
+            
+        Returns:
+            SPHINCSSignature with signature and message
+        """
+        if LIBOQS_AVAILABLE:
+            return self._sign_message_sphincs_liboqs(message, private_key)
+        else:
+            return self._sign_message_sphincs_demo(message, private_key)
+    
+    def _sign_message_sphincs_liboqs(self, message: bytes, private_key: bytes) -> SPHINCSSignature:
+        """Sign message using liboqs SPHINCS+"""
+        try:
+            with oqs.Signature(self.sphincs_algorithm) as sig:
+                signature = sig.sign(message, private_key)
+                
+                logger.debug(f"Signed message with SPHINCS+: signature={len(signature)} bytes")
+                
+                return SPHINCSSignature(
+                    signature=signature,
+                    message=message,
+                    algorithm=self.sphincs_algorithm
+                )
+        except Exception as e:
+            logger.error(f"Error signing message with SPHINCS+ liboqs: {e}")
+            return self._sign_message_sphincs_demo(message, private_key)
+    
+    def _sign_message_sphincs_demo(self, message: bytes, private_key: bytes) -> SPHINCSSignature:
+        """Demo SPHINCS+ message signing (fallback)"""
+        # Generate deterministic signature based on message and key
+        combined = message + private_key
+        signature = hashlib.sha256(combined).digest() + secrets.token_bytes(17088)  # Approximate SPHINCS+ signature size
+        
+        logger.warning("Using demo SPHINCS+ message signing - not cryptographically secure")
+        
+        return SPHINCSSignature(
+            signature=signature,
+            message=message,
+            algorithm="Demo-SPHINCS+"
+        )
+    
+    def verify_signature_sphincs(self, signature: bytes, message: bytes, public_key: bytes) -> bool:
+        """
+        Verify a SPHINCS+ signature
+        
+        Args:
+            signature: SPHINCS+ signature
+            message: Original message
+            public_key: SPHINCS+ public key
+            
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        if LIBOQS_AVAILABLE:
+            return self._verify_signature_sphincs_liboqs(signature, message, public_key)
+        else:
+            return self._verify_signature_sphincs_demo(signature, message, public_key)
+    
+    def _verify_signature_sphincs_liboqs(self, signature: bytes, message: bytes, public_key: bytes) -> bool:
+        """Verify SPHINCS+ signature using liboqs"""
+        try:
+            with oqs.Signature(self.sphincs_algorithm) as sig:
+                is_valid = sig.verify(message, signature, public_key)
+                
+                logger.debug(f"SPHINCS+ signature verification: {is_valid}")
+                
+                return is_valid
+        except Exception as e:
+            logger.error(f"Error verifying SPHINCS+ signature with liboqs: {e}")
+            return self._verify_signature_sphincs_demo(signature, message, public_key)
+    
+    def _verify_signature_sphincs_demo(self, signature: bytes, message: bytes, public_key: bytes) -> bool:
+        """Demo SPHINCS+ signature verification (fallback)"""
+        # Simple demo verification - check if signature starts with expected hash
+        expected_hash = hashlib.sha256(message + public_key).digest()
+        is_valid = signature.startswith(expected_hash)
+        
+        logger.warning("Using demo SPHINCS+ signature verification - not cryptographically secure")
+        
+        return is_valid
+    
+    def get_available_kyber_variants(self) -> List[str]:
+        """Get list of available Kyber variants"""
+        if LIBOQS_AVAILABLE:
+            try:
+                all_kems = oqs.get_enabled_kem_mechanisms()
+                return [k for k in all_kems if 'kyber' in k.lower()]
+            except Exception:
+                pass
+        return ["Kyber512", "Kyber768", "Kyber1024"]
+    
+    def get_available_dilithium_variants(self) -> List[str]:
+        """Get list of available Dilithium variants"""
+        if LIBOQS_AVAILABLE:
+            try:
+                all_sigs = oqs.get_enabled_sig_mechanisms()
+                return [s for s in all_sigs if 'dilithium' in s.lower()]
+            except Exception:
+                pass
+        return ["Dilithium2", "Dilithium3", "Dilithium5"]
     
     def clear_keys(self, keypair: Any):
         """Securely clear PQC key material"""

@@ -5,6 +5,7 @@ Updated BB84 QKD Simulation System - Main FastAPI Application with Enhanced Cryp
 from fastapi import FastAPI, HTTPException, File, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
+from contextlib import asynccontextmanager
 import socketio
 import uvicorn
 from typing import Dict, List, Optional
@@ -28,16 +29,34 @@ from sqlalchemy.orm import Session
 
 from app.db import Base as DBBase, engine, get_db
 from app.models.user import User as DBUser
+from app.redis_client import init_redis, close_redis
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Startup / shutdown lifecycle."""
+    # ── Startup ──
+    try:
+        DBBase.metadata.create_all(bind=engine)
+        logger.info("Database initialised and tables ensured.")
+    except Exception as e:
+        logger.error(f"Failed to initialise database: {e}")
+    await init_redis()
+    yield
+    # ── Shutdown ──
+    await close_redis()
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="BB84 QKD Simulation API - Enhanced Cryptography",
     description="Backend API for BB84 Quantum Key Distribution Simulation with Production-Grade Cryptography",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware for frontend communication
@@ -78,15 +97,6 @@ eve_module = EveModule()
 # =======================
 # Authentication (JWT)
 # =======================
-@app.on_event("startup")
-def on_startup_init_db():
-    # Ensure tables exist even when started via `uvicorn app.main:socket_app`
-    try:
-        DBBase.metadata.create_all(bind=engine)
-        logger.info("Database initialized and tables ensured.")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -294,6 +304,8 @@ async def start_bb84_simulation(session_id: str, n_bits: int = 1000, test_fracti
 @app.post("/session/{session_id}/send_file")
 async def send_encrypted_file(session_id: str, sender_id: str, file: UploadFile = File(...), current_user: str = Depends(get_current_username)):
     """Send encrypted file to session"""
+    import time
+    t0 = time.perf_counter()
     session = session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -304,6 +316,7 @@ async def send_encrypted_file(session_id: str, sender_id: str, file: UploadFile 
     try:
         # Read file data
         file_data = await file.read()
+        enc_time_ms = 0.0
         
         # Check if this is an already encrypted file from frontend
         if file.filename and file.filename.endswith('.enc'):
@@ -348,7 +361,9 @@ async def send_encrypted_file(session_id: str, sender_id: str, file: UploadFile 
         else:
             # This is a plain file, encrypt it on the backend
             logger.info(f"Encrypting plain file: {file.filename}")
+            t_e = time.perf_counter()
             secure_msg = session.add_encrypted_file(sender_id, file_data, file.filename or "unknown")
+            enc_time_ms = (time.perf_counter() - t_e) * 1000
         
         if not secure_msg:
             raise HTTPException(status_code=500, detail="Failed to encrypt file")
@@ -360,6 +375,18 @@ async def send_encrypted_file(session_id: str, sender_id: str, file: UploadFile 
             "filename": file.filename,
             "file_size": len(file_data),
             "timestamp": secure_msg.timestamp.isoformat()
+        }, room=f"session_{session_id}")
+        
+        # EMIT TELEMETRY
+        total_time_ms = (time.perf_counter() - t0) * 1000
+        # If it was frontend-encrypted, we track processing time, but enc_time_ms is 0 (done on client)
+        await sio.emit("performance_metric", {
+            "type": "file_encryption",
+            "operation": "XChaCha20-Poly1305",
+            "encryption_ms": round(enc_time_ms, 3) if enc_time_ms > 0 else "client_side",
+            "total_processing_ms": round(total_time_ms, 3),
+            "file_size_bytes": len(file_data),
+            "sender_id": sender_id,
         }, room=f"session_{session_id}")
         
         return {
@@ -376,6 +403,8 @@ async def send_encrypted_file(session_id: str, sender_id: str, file: UploadFile 
 @app.get("/session/{session_id}/download_file/{message_id}")
 async def download_encrypted_file(session_id: str, message_id: str, user_id: str, current_user: str = Depends(get_current_username)):
     """Download and decrypt file"""
+    import time
+    t0 = time.perf_counter()
     session = session_manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -398,7 +427,10 @@ async def download_encrypted_file(session_id: str, message_id: str, user_id: str
         
         # Decrypt file
         logger.info(f"Attempting to decrypt file {message_id} for user {user_id}")
+        t_d = time.perf_counter()
         result = session.decrypt_file(file_message)
+        dec_time_ms = (time.perf_counter() - t_d) * 1000
+        
         if not result:
             logger.error(f"Failed to decrypt file {message_id}")
             raise HTTPException(status_code=500, detail="Failed to decrypt file")
@@ -406,6 +438,22 @@ async def download_encrypted_file(session_id: str, message_id: str, user_id: str
         file_data, filename = result
         logger.info(f"Successfully decrypted file {message_id}: {filename} ({len(file_data)} bytes)")
         logger.info(f"Decrypted file data preview: {file_data[:50].hex() if len(file_data) > 0 else 'empty'}")
+        
+        # EMIT TELEMETRY (background task so we don't block the fast REST response)
+        total_time_ms = (time.perf_counter() - t0) * 1000
+        async def broadcast_telemetry():
+            try:
+                await sio.emit("performance_metric", {
+                    "type": "file_decryption",
+                    "operation": "XChaCha20-Poly1305",
+                    "decryption_ms": round(dec_time_ms, 3),
+                    "total_processing_ms": round(total_time_ms, 3),
+                    "file_size_bytes": len(file_data),
+                    "receiver_id": user_id,
+                }, room=f"session_{session_id}")
+            except Exception as e:
+                logger.error(f"Failed to emit file logic telemetry: {e}")
+        asyncio.create_task(broadcast_telemetry())
         
         # Return base64 encoded file data (for JSON transport)
         return {
@@ -464,16 +512,30 @@ async def get_pqc_info(session_id: str, current_user: str = Depends(get_current_
     """Get PQC capabilities and information"""
     try:
         from app.services.pqc_service import pqc_service
+        from app.services.pqc_config import pqc_config_service
+        
         pqc_info = pqc_service.get_pqc_info()
+        config_summary = pqc_config_service.get_config_summary()
         
         return {
             "session_id": session_id,
             "pqc_info": pqc_info,
+            "config": config_summary,
             "status": "available" if pqc_info["liboqs_available"] or pqc_info["pqcrypto_available"] else "demo_only"
         }
     except Exception as e:
         logger.error(f"Error getting PQC info: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get PQC information")
+
+@app.get("/pqc/config")
+async def get_pqc_config(current_user: str = Depends(get_current_username)):
+    """Get PQC algorithm configuration and options"""
+    try:
+        from app.services.pqc_config import pqc_config_service
+        return pqc_config_service.get_config_summary()
+    except Exception as e:
+        logger.error(f"Error getting PQC config: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get PQC configuration")
 
 @app.get("/session/{session_id}/pqc/public_keys")
 async def get_pqc_public_keys(session_id: str, current_user: str = Depends(get_current_username)):
@@ -733,6 +795,8 @@ async def join_session_socket(sid, data):
 @sio.event
 async def send_encrypted_message(sid, data):
     """Handle encrypted message transmission using OTP+HMAC"""
+    import time
+    t0 = time.perf_counter()
     try:
         session_id = data.get("session_id")
         message_content = data.get("message_content")
@@ -749,7 +813,9 @@ async def send_encrypted_message(sid, data):
             return
         
         # Add encrypted message to session
+        t_enc_start = time.perf_counter()
         secure_msg = session.add_secure_message(sender_id, message_content, MessageType.CHAT_OTP)
+        t_enc_end = time.perf_counter()
         
         if not secure_msg:
             await sio.emit("error", {"message": "Failed to encrypt message"}, room=sid)
@@ -767,6 +833,18 @@ async def send_encrypted_message(sid, data):
         
         logger.debug(f"Encrypted message sent from {sender_id} in session {session_id}")
         
+        # EMIT TELEMETRY
+        total_time_ms = (time.perf_counter() - t0) * 1000
+        enc_time_ms = (t_enc_end - t_enc_start) * 1000
+        await sio.emit("performance_metric", {
+            "type": "message_encryption",
+            "operation": "OTP+HMAC-SHA3",
+            "encryption_ms": round(enc_time_ms, 3),
+            "total_processing_ms": round(total_time_ms, 3),
+            "size_chars": len(message_content),
+            "sender_id": sender_id
+        }, room=f"session_{session_id}")
+        
     except Exception as e:
         logger.error(f"Error sending encrypted message: {str(e)}")
         await sio.emit("error", {"message": "Failed to send message"}, room=sid)
@@ -774,6 +852,8 @@ async def send_encrypted_message(sid, data):
 @sio.event
 async def decrypt_message(sid, data):
     """Handle message decryption request"""
+    import time
+    t0 = time.perf_counter()
     try:
         session_id = data.get("session_id")
         message_id = data.get("message_id")
@@ -809,7 +889,9 @@ async def decrypt_message(sid, data):
             return
         
         # Decrypt message
+        dec_start = time.perf_counter()
         decrypted_content = session.decrypt_message(target_message)
+        dec_end = time.perf_counter()
         
         if decrypted_content is None:
             await sio.emit("error", {"message": "Failed to decrypt message"}, room=sid)
@@ -820,6 +902,18 @@ async def decrypt_message(sid, data):
             "decrypted_content": decrypted_content,
             "sender_id": target_message.sender_id
         }, room=sid)
+        
+        # EMIT TELEMETRY
+        total_time_ms = (time.perf_counter() - t0) * 1000
+        dec_time_ms = (dec_end - dec_start) * 1000
+        await sio.emit("performance_metric", {
+            "type": "message_decryption",
+            "operation": "OTP+HMAC-SHA3",
+            "decryption_ms": round(dec_time_ms, 3),
+            "total_processing_ms": round(total_time_ms, 3),
+            "size_chars": len(decrypted_content),
+            "receiver_id": user_id
+        }, room=f"session_{session_id}")
         
     except Exception as e:
         logger.error(f"Error decrypting message: {str(e)}")
@@ -859,6 +953,8 @@ async def eve_control(sid, data):
 # Background task for BB84 simulation
 async def run_bb84_simulation(session_id: str, n_bits: int, test_fraction: float, use_hybrid: bool = False):
     """Run BB84 simulation with real-time updates and enhanced cryptography"""
+    import time
+    t_sim_start = time.perf_counter()
     try:
         session = session_manager.get_session(session_id)
         if not session:
@@ -879,6 +975,7 @@ async def run_bb84_simulation(session_id: str, n_bits: int, test_fraction: float
         
         # Generate PQC key if hybrid mode requested
         pqc_key = None
+        t_pqc_start = time.perf_counter()
         if use_hybrid:
             # Generate real PQC shared secret using Kyber KEM
             try:
@@ -915,6 +1012,9 @@ async def run_bb84_simulation(session_id: str, n_bits: int, test_fraction: float
                     "error": str(e)
                 }, room=room_name)
         
+        t_pqc_end = time.perf_counter()
+        pqc_ms = (t_pqc_end - t_pqc_start) * 1000
+        
         async for progress_data in bb84_engine.run_simulation(
             n_bits, test_fraction, eve_params, eve_module if eve_present else None
         ):
@@ -926,6 +1026,14 @@ async def run_bb84_simulation(session_id: str, n_bits: int, test_fraction: float
                 await sio.emit("eve_detected", {
                     "qber": progress_data.get("qber"),
                     "threshold": progress_data.get("threshold")
+                }, room=room_name)
+                
+                total_ms = (time.perf_counter() - t_sim_start) * 1000
+                await sio.emit("performance_metric", {
+                    "type": "bb84_simulation",
+                    "status": "aborted",
+                    "total_time_ms": round(total_ms, 3),
+                    "qber": progress_data.get("qber")
                 }, room=room_name)
                 session_manager.terminate_session(session_id)
                 return
@@ -940,6 +1048,8 @@ async def run_bb84_simulation(session_id: str, n_bits: int, test_fraction: float
         
         if success:
             crypto_info = session.get_session_security_info()
+            total_bb84_ms = (time.perf_counter() - t_sim_start) * 1000
+            
             await sio.emit("bb84_complete", {
                 "success": True,
                 "key_length": len(bb84_key),
@@ -950,6 +1060,19 @@ async def run_bb84_simulation(session_id: str, n_bits: int, test_fraction: float
             }, room=room_name)
             
             logger.info(f"BB84 simulation completed successfully for session {session_id}")
+            
+            # EMIT TELEMETRY FOR COMPLETE BB84
+            await sio.emit("performance_metric", {
+                "type": "bb84_simulation",
+                "status": "success",
+                "total_time_ms": round(total_bb84_ms, 3),
+                "pqc_overhead_ms": round(pqc_ms, 3) if use_hybrid else 0.0,
+                "qubits": n_bits,
+                "final_key_bytes": len(bb84_key),
+                "hybrid": use_hybrid,
+                "eve_present": eve_present
+            }, room=room_name)
+            
         else:
             raise ValueError("Failed to establish secure session")
         

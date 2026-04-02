@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Security Analytics Dashboard - BB84 Quantum Sim</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#3c83f6",
+              "background-light": "#f5f7f8",
+              "background-dark": "#101722",
+              "surface-dark": "#1a2332",
+              "accent-green": "#0bda5e",
+              "accent-red": "#fa6238",
+              "accent-amber": "#f59e0b",
+            },
+            fontFamily: {
+              "display": ["Space Grotesk", "sans-serif"],
+              "body": ["Space Grotesk", "sans-serif"]
+            },
+            borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px" },
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen flex flex-col overflow-x-hidden">
+<div class="relative flex h-full w-full flex-col group/design-root">
+<!-- Navbar -->
+<header class="sticky top-0 z-50 flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-background-dark/90 backdrop-blur-md px-4 sm:px-10 py-3">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-4 text-slate-900 dark:text-white">
+<div class="size-8 flex items-center justify-center rounded bg-primary/20 text-primary">
+<span class="material-symbols-outlined text-2xl">grid_view</span>
+</div>
+<h2 class="text-lg font-bold leading-tight tracking-[-0.015em]">BB84 Quantum Sim</h2>
+</div>
+<div class="hidden lg:flex items-center gap-9">
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">Dashboard</a>
+<a class="text-slate-900 dark:text-white text-sm font-medium leading-normal" href="#">Analytics</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">Keys</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">Logs</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors text-sm font-medium leading-normal" href="#">Settings</a>
+</div>
+</div>
+<div class="flex flex-1 justify-end gap-6">
+<label class="flex flex-col min-w-40 !h-10 max-w-64 hidden sm:block">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-50 dark:bg-surface-dark transition-all focus-within:ring-primary">
+<div class="text-slate-400 flex border-none items-center justify-center pl-4" data-icon="MagnifyingGlass" data-size="24px" data-weight="regular">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-slate-900 dark:text-white focus:outline-0 focus:ring-0 border-none bg-transparent h-full placeholder:text-slate-400 px-4 pl-2 text-sm font-normal leading-normal" placeholder="Search logs..." value=""/>
+</div>
+</label>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-slate-200 dark:ring-slate-700 cursor-pointer hover:ring-primary transition-all" data-alt="User profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBvY1qFF8hoQsRL8p8sOJFG0LD9WF1v5ql7KwXCk5CHOqbJukQWj6Byxe8CRm0A8LukbIdww6qr2vu-0NyiFarPb9iFV1stlQoI13k_Y8Cy5AY76Dwd8Ys_GL09EdwcZBY07AgVbsEGK0B8EL3siP1UuamEvm5GxzlP51acUfJx4Hfo86AIAwyrMHbBLst5BmY69IAAqguxGL3xZ2r-fdNURWmPp9KKc053LLdkl_6xwtPg5ydobrC104pb4W1O9djxaaHK_ptB5YQ");'></div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="layout-container flex h-full grow flex-col px-4 sm:px-8 lg:px-40 py-8">
+<div class="layout-content-container flex flex-col max-w-[1200px] w-full mx-auto flex-1 gap-8">
+<!-- Hero Section: Title & Date -->
+<div class="flex flex-wrap items-end justify-between gap-4">
+<div class="flex flex-col gap-2">
+<h1 class="text-slate-900 dark:text-white text-3xl sm:text-4xl font-black leading-tight tracking-[-0.033em]">Security Analytics</h1>
+<p class="text-slate-500 dark:text-slate-400 text-base font-normal leading-normal max-w-xl">Real-time monitoring of quantum bit error rates (QBER) and BB84 protocol integrity.</p>
+</div>
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-surface-dark border border-slate-200 dark:border-slate-700">
+<span class="material-symbols-outlined text-slate-400 text-sm">calendar_today</span>
+<span class="text-sm font-medium text-slate-600 dark:text-slate-300">Oct 24, 2023</span>
+</div>
+</div>
+<!-- KPI Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+<!-- Health Card -->
+<div class="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-accent-green/10 rounded-full blur-2xl group-hover:bg-accent-green/20 transition-all"></div>
+<div class="flex justify-between items-start z-10">
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">System Health</p>
+<span class="material-symbols-outlined text-accent-green">ecg_heart</span>
+</div>
+<div class="flex items-baseline gap-2 mt-2 z-10">
+<p class="text-slate-900 dark:text-white text-3xl font-bold leading-tight">98%</p>
+<span class="text-accent-green text-sm font-medium bg-accent-green/10 px-1.5 py-0.5 rounded flex items-center">
+<span class="material-symbols-outlined text-sm mr-0.5">arrow_upward</span>1.2%
+                            </span>
+</div>
+<div class="w-full bg-slate-100 dark:bg-slate-700 h-1.5 mt-4 rounded-full overflow-hidden">
+<div class="bg-accent-green h-full rounded-full" style="width: 98%"></div>
+</div>
+</div>
+<!-- Risk Card -->
+<div class="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl group-hover:bg-primary/20 transition-all"></div>
+<div class="flex justify-between items-start z-10">
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">Current Risk</p>
+<span class="material-symbols-outlined text-primary">security</span>
+</div>
+<div class="flex items-baseline gap-2 mt-2 z-10">
+<p class="text-slate-900 dark:text-white text-3xl font-bold leading-tight">Minimal</p>
+</div>
+<div class="flex items-center gap-2 mt-4 text-xs text-slate-500 dark:text-slate-400">
+<span class="size-2 rounded-full bg-primary animate-pulse"></span>
+<span>Monitoring active</span>
+</div>
+</div>
+<!-- Channels Card -->
+<div class="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all"></div>
+<div class="flex justify-between items-start z-10">
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">Active Channels</p>
+<span class="material-symbols-outlined text-purple-500">hub</span>
+</div>
+<div class="flex items-baseline gap-2 mt-2 z-10">
+<p class="text-slate-900 dark:text-white text-3xl font-bold leading-tight">4</p>
+<span class="text-slate-400 text-sm font-medium">/ 6 Total</span>
+</div>
+<div class="flex -space-x-2 mt-3">
+<div class="size-6 rounded-full bg-blue-500 border-2 border-white dark:border-surface-dark"></div>
+<div class="size-6 rounded-full bg-green-500 border-2 border-white dark:border-surface-dark"></div>
+<div class="size-6 rounded-full bg-purple-500 border-2 border-white dark:border-surface-dark"></div>
+<div class="size-6 rounded-full bg-amber-500 border-2 border-white dark:border-surface-dark"></div>
+</div>
+</div>
+<!-- Key Rate Card -->
+<div class="flex flex-col gap-2 rounded-xl p-6 bg-white dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-accent-amber/10 rounded-full blur-2xl group-hover:bg-accent-amber/20 transition-all"></div>
+<div class="flex justify-between items-start z-10">
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">Key Gen Rate</p>
+<span class="material-symbols-outlined text-accent-amber">key</span>
+</div>
+<div class="flex items-baseline gap-2 mt-2 z-10">
+<p class="text-slate-900 dark:text-white text-3xl font-bold leading-tight">420</p>
+<span class="text-slate-500 text-sm font-medium">bits/s</span>
+</div>
+<div class="flex items-center gap-2 mt-4">
+<span class="text-accent-amber text-xs font-medium bg-accent-amber/10 px-2 py-0.5 rounded-full">Optimal Range</span>
+</div>
+</div>
+</div>
+<!-- Charts Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- QBER History (Main Chart - Spans 2 cols) -->
+<div class="lg:col-span-2 flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-dark p-6 shadow-sm">
+<div class="flex items-center justify-between">
+<div>
+<h3 class="text-slate-900 dark:text-white text-lg font-bold leading-tight">QBER History</h3>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Quantum Bit Error Rate over last 24h</p>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-2xl font-bold text-slate-900 dark:text-white">2.4%</span>
+<span class="text-sm text-slate-500">Avg</span>
+</div>
+</div>
+<!-- Chart Container -->
+<div class="flex-1 min-h-[250px] w-full relative pt-6">
+<svg class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 1000 300">
+<!-- Grid Lines -->
+<line class="text-slate-200 dark:text-slate-700" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1" x1="0" x2="1000" y1="0" y2="0"></line>
+<line class="text-slate-200 dark:text-slate-700" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1" x1="0" x2="1000" y1="75" y2="75"></line>
+<line class="text-slate-200 dark:text-slate-700" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1" x1="0" x2="1000" y1="150" y2="150"></line>
+<line class="text-slate-200 dark:text-slate-700" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1" x1="0" x2="1000" y1="225" y2="225"></line>
+<line class="text-slate-200 dark:text-slate-700" stroke="currentColor" stroke-width="1" x1="0" x2="1000" y1="300" y2="300"></line>
+<!-- Gradient Fill -->
+<defs>
+<lineargradient id="qberGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#fa6238" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#fa6238" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0,250 C100,240 200,260 300,200 C400,140 500,180 600,150 C700,120 800,160 900,100 L1000,120 L1000,300 L0,300 Z" fill="url(#qberGradient)"></path>
+<!-- Line Path -->
+<path d="M0,250 C100,240 200,260 300,200 C400,140 500,180 600,150 C700,120 800,160 900,100 L1000,120" fill="none" stroke="#fa6238" stroke-linecap="round" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+<!-- Data Point -->
+<circle cx="900" cy="100" fill="#101722" r="6" stroke="#fa6238" stroke-width="3"></circle>
+<text fill="#fa6238" font-size="14" font-weight="bold" text-anchor="middle" x="900" y="80">Peak 4.1%</text>
+</svg>
+</div>
+<!-- X-Axis Labels -->
+<div class="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-medium px-1">
+<span>00:00</span>
+<span>04:00</span>
+<span>08:00</span>
+<span>12:00</span>
+<span>16:00</span>
+<span>20:00</span>
+<span>Now</span>
+</div>
+</div>
+<!-- Protocol Stages (Pie/Donut & List) -->
+<div class="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-dark p-6 shadow-sm">
+<h3 class="text-slate-900 dark:text-white text-lg font-bold leading-tight">Protocol Stages</h3>
+<div class="flex flex-col items-center justify-center flex-1 gap-6">
+<!-- Donut Chart -->
+<div class="relative size-48">
+<svg class="size-full rotate-[-90deg]" viewbox="0 0 36 36">
+<!-- Background Ring -->
+<path class="text-slate-100 dark:text-slate-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="3"></path>
+<!-- Segments -->
+<path class="text-primary" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="40, 100" stroke-width="3"></path>
+<path class="text-purple-500" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="30, 100" stroke-dashoffset="-40" stroke-width="3"></path>
+<path class="text-cyan-400" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="15, 100" stroke-dashoffset="-70" stroke-width="3"></path>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-2xl font-bold text-slate-900 dark:text-white">1.2k</span>
+<span class="text-xs text-slate-500">Messages</span>
+</div>
+</div>
+<!-- Legend -->
+<div class="w-full flex flex-col gap-3">
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2">
+<span class="size-3 rounded-full bg-primary"></span>
+<span class="text-slate-600 dark:text-slate-300">Basis Exchange</span>
+</div>
+<span class="font-medium text-slate-900 dark:text-white">40%</span>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2">
+<span class="size-3 rounded-full bg-purple-500"></span>
+<span class="text-slate-600 dark:text-slate-300">Sifting</span>
+</div>
+<span class="font-medium text-slate-900 dark:text-white">30%</span>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2">
+<span class="size-3 rounded-full bg-cyan-400"></span>
+<span class="text-slate-600 dark:text-slate-300">Error Correction</span>
+</div>
+<span class="font-medium text-slate-900 dark:text-white">15%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Violations Table Section -->
+<div class="flex flex-col gap-4">
+<div class="flex items-center justify-between px-2">
+<h2 class="text-slate-900 dark:text-white text-xl font-bold leading-tight">Recent Security Violations</h2>
+<button class="text-sm font-medium text-primary hover:text-blue-400 transition-colors">View All Logs</button>
+</div>
+<div class="w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-dark shadow-sm">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-slate-50 dark:bg-[#222b3b]">
+<tr>
+<th class="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Severity</th>
+<th class="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Timestamp</th>
+<th class="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Event Type</th>
+<th class="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 w-1/3">Description</th>
+<th class="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Status</th>
+<th class="p-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+<tr class="group hover:bg-slate-50 dark:hover:bg-[#222b3b]/50 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-accent-red text-xl">warning</span>
+<span class="text-accent-red font-medium text-sm">Critical</span>
+</div>
+</td>
+<td class="p-4 text-sm text-slate-600 dark:text-slate-300 font-mono">2023-10-24 14:23:01</td>
+<td class="p-4 text-sm font-medium text-slate-900 dark:text-white">Photon Number Splitting</td>
+<td class="p-4 text-sm text-slate-600 dark:text-slate-400">Detected multi-photon pulse interception attempt on Channel 4.</td>
+<td class="p-4">
+<span class="inline-flex items-center rounded-full bg-red-500/10 px-2 py-1 text-xs font-medium text-red-500 ring-1 ring-inset ring-red-500/20">Active</span>
+</td>
+<td class="p-4">
+<button class="text-slate-400 hover:text-white"><span class="material-symbols-outlined">more_vert</span></button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50 dark:hover:bg-[#222b3b]/50 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-accent-amber text-xl">error</span>
+<span class="text-accent-amber font-medium text-sm">Medium</span>
+</div>
+</td>
+<td class="p-4 text-sm text-slate-600 dark:text-slate-300 font-mono">2023-10-24 13:45:12</td>
+<td class="p-4 text-sm font-medium text-slate-900 dark:text-white">Basis Mismatch Spike</td>
+<td class="p-4 text-sm text-slate-600 dark:text-slate-400">Abnormal increase in basis mismatch rate during sifting.</td>
+<td class="p-4">
+<span class="inline-flex items-center rounded-full bg-green-500/10 px-2 py-1 text-xs font-medium text-green-500 ring-1 ring-inset ring-green-500/20">Resolved</span>
+</td>
+<td class="p-4">
+<button class="text-slate-400 hover:text-white"><span class="material-symbols-outlined">more_vert</span></button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50 dark:hover:bg-[#222b3b]/50 transition-colors">
+<td class="p-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-blue-400 text-xl">info</span>
+<span class="text-blue-400 font-medium text-sm">Low</span>
+</div>
+</td>
+<td class="p-4 text-sm text-slate-600 dark:text-slate-300 font-mono">2023-10-24 11:12:05</td>
+<td class="p-4 text-sm font-medium text-slate-900 dark:text-white">Detector Efficiency Drop</td>
+<td class="p-4 text-sm text-slate-600 dark:text-slate-400">Bob's detector D0 showing 2% efficiency variance.</td>
+<td class="p-4">
+<span class="inline-flex items-center rounded-full bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-500 ring-1 ring-inset ring-yellow-500/20">Investigating</span>
+</td>
+<td class="p-4">
+<button class="text-slate-400 hover:text-white"><span class="material-symbols-outlined">more_vert</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

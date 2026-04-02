@@ -1,5 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Shield, Wifi, WifiOff, AlertTriangle, Menu, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Activity, Shield, Wifi, WifiOff, AlertTriangle, LogOut, CheckCircle2, Moon, Sun, Monitor, Menu, X, Settings, RefreshCw, Layers } from 'lucide-react';
+
+// Contexts
+
+// Components
 import SessionManager from './components/SessionManager';
 import BB84Simulator from './components/BB84Simulator';
 import ChatInterface from './components/ChatInterface';
@@ -12,16 +16,17 @@ import FileTransferModule from './components/FileTransferModule';
 import QBERAlertModal from './components/QBERAlertModal';
 import ThemeToggle from './components/ThemeToggle';
 import CollapsibleSection from './components/CollapsibleSection';
+
 import socketService from './services/socketService';
 import apiService from './services/apiService';
 import cryptoService from './services/cryptoService';
 import AuthPage from './components/AuthPage';
 import { useBreakpoint } from './hooks/useBreakpoint';
-import type{ 
-  User, 
-  Session, 
-  BB84Progress, 
-  SecureMessage, 
+import type {
+  User,
+  Session,
+  BB84Progress,
+  SecureMessage,
   AppState,
   QBERDataPoint,
   SecurityViolation
@@ -57,15 +62,10 @@ const App: React.FC = () => {
   }>>([]);
   const [highContrast, setHighContrast] = useState(false);
   const [showQBERModal, setShowQBERModal] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isMobile, isTablet, isDesktop } = useBreakpoint();
   const isNarrowScreen = !isDesktop;
+  const currentSessionRef = useRef<Session | null>(null);
 
-  useEffect(() => {
-    if (!isNarrowScreen) {
-      setMobileMenuOpen(false);
-    }
-  }, [isNarrowScreen]);
 
   // Initialize app on mount
   useEffect(() => {
@@ -80,7 +80,7 @@ const App: React.FC = () => {
     try {
       const t = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
       setAuthToken(t);
-    } catch {}
+    } catch { }
   }, []);
 
   // Auto-refresh server health
@@ -96,6 +96,10 @@ const App: React.FC = () => {
   useEffect(() => {
     document.body.classList.toggle('high-contrast', highContrast);
   }, [highContrast]);
+
+  useEffect(() => {
+    currentSessionRef.current = state.currentSession;
+  }, [state.currentSession]);
 
   const formatSessionId = useCallback((value?: string) => {
     if (!value) return '—';
@@ -135,7 +139,7 @@ const App: React.FC = () => {
 
       if (serverOnline) {
         await setupSocketConnection();
-        addNotification('success', 'Connected to BB84 QKD server');
+        // Connection is indicated by the header status badge
       } else {
         addNotification('error', 'Server is offline. Please check backend connection.');
       }
@@ -153,11 +157,11 @@ const App: React.FC = () => {
 
   const setupSocketConnection = async () => {
     socketService.connect();
-    
+
     // Connection events
     socketService.on('connect', () => {
       setState(prev => ({ ...prev, isConnected: true }));
-      addNotification('success', 'Real-time connection established');
+      // Real-time status shown in header
     });
 
     socketService.on('disconnect', (reason: string) => {
@@ -172,7 +176,7 @@ const App: React.FC = () => {
 
     socketService.onBB84Progress((progress: BB84Progress) => {
       setState(prev => ({ ...prev, bb84Progress: progress }));
-      
+
       // Update QBER history
       if (progress.qber !== undefined) {
         const qberPoint: QBERDataPoint = {
@@ -182,12 +186,12 @@ const App: React.FC = () => {
           stage: progress.stage
         };
         cryptoService.addQBERDataPoint(qberPoint);
-        setState(prev => ({ 
-          ...prev, 
-          qberHistory: [...prev.qberHistory, qberPoint].slice(-100) 
+        setState(prev => ({
+          ...prev,
+          qberHistory: [...prev.qberHistory, qberPoint].slice(-100)
         }));
       }
-      
+
       if (progress.qber_exceeded) {
         setState(prev => ({ ...prev, eveDetected: true }));
         addNotification('error', 'Eavesdropping detected via QBER analysis!');
@@ -202,19 +206,20 @@ const App: React.FC = () => {
           cryptoService.updateCryptoInfo(result.crypto_info);
           setState(prev => ({ ...prev, cryptoInfo: result.crypto_info }));
         }
-        
+
         // Fetch the real session key from the backend with improved timing
-        if (state.currentSession) {
+        const currentSession = currentSessionRef.current;
+        if (currentSession) {
           console.log('BB84 completed successfully, starting automatic key retrieval...');
-          
+
           // Wait a bit for the backend to be ready, then fetch the key
           setTimeout(async () => {
             try {
               console.log('Attempting to fetch session key after BB84 completion...');
-              if (state.currentSession) {
-                await fetchSessionKey(state.currentSession.session_id, result.hybrid_mode);
+              if (currentSessionRef.current) {
+                await fetchSessionKey(currentSessionRef.current.session_id, result.hybrid_mode);
               }
-              
+
               // Verify the key was retrieved successfully
               const verifyKey = cryptoService.getSessionKey();
               if (verifyKey && verifyKey.length === 32) {
@@ -225,25 +230,25 @@ const App: React.FC = () => {
                 // Try multiple retries with increasing delays
                 const retryDelays = [1000, 2000, 3000]; // 1s, 2s, 3s
                 let retryCount = 0;
-                
+
                 const attemptRetry = async () => {
                   if (retryCount >= retryDelays.length) {
                     console.error('All automatic retries failed');
                     addNotification('warning', 'Session key retrieval failed. Please use "Retry Key Retrieval" button.');
                     return;
                   }
-                  
+
                   const delay = retryDelays[retryCount];
                   retryCount++;
-                  
+
                   console.log(`Retrying session key retrieval (attempt ${retryCount}/${retryDelays.length}) in ${delay}ms...`);
-                  
+
                   setTimeout(async () => {
                     try {
-                      if (state.currentSession) {
-                        await fetchSessionKey(state.currentSession.session_id, result.hybrid_mode);
+                      if (currentSessionRef.current) {
+                        await fetchSessionKey(currentSessionRef.current.session_id, result.hybrid_mode);
                       }
-                      
+
                       // Check if it worked
                       const verifyKey = cryptoService.getSessionKey();
                       if (verifyKey && verifyKey.length === 32) {
@@ -260,7 +265,7 @@ const App: React.FC = () => {
                     }
                   }, delay);
                 };
-                
+
                 attemptRetry();
               }
             } catch (error) {
@@ -269,14 +274,14 @@ const App: React.FC = () => {
             }
           }, 1000); // Wait 1 second for backend to be ready
         }
-        
+
         addNotification('success', `Secure session established${result.hybrid_mode ? ' with hybrid security' : ''}`);
       } else {
         addNotification('error', 'BB84 key generation failed');
       }
-      
-      setState(prev => ({ 
-        ...prev, 
+
+      setState(prev => ({
+        ...prev,
         bb84Progress: { ...result, stage: 'complete', progress: 1.0 }
       }));
     });
@@ -287,14 +292,9 @@ const App: React.FC = () => {
 
     // Enhanced message events
     socketService.onEncryptedMessageReceived((message) => {
-      // Avoid duplicates by message_id and content
+      // Avoid duplicates by message_id
       setState(prev => {
-        const exists = prev.messages.some(m => 
-          m.message_id === message.message_id || 
-          (m.message_type === 'chat_otp' && 
-           m.sender_id === message.sender_id && 
-           Math.abs(new Date(m.timestamp).getTime() - new Date(message.timestamp).getTime()) < 5000) // Within 5 seconds
-        );
+        const exists = prev.messages.some(m => m.message_id === message.message_id);
         if (exists) {
           console.log('Duplicate message detected, skipping:', message.message_id);
           return prev;
@@ -318,28 +318,22 @@ const App: React.FC = () => {
     socketService.onMessageDecrypted(({ message_id, decrypted_content }) => {
       setState(prev => ({
         ...prev,
-        messages: prev.messages.map(msg => 
-          msg.message_id === message_id 
+        messages: prev.messages.map(msg =>
+          msg.message_id === message_id
             ? { ...msg, decrypted_content }
             : msg
         )
       }));
-      
+
       // Cache decrypted content
       cryptoService.cacheDecryptedContent(message_id, decrypted_content);
     });
 
     // File transfer events
     socketService.onEncryptedFileReceived((fileInfo) => {
-      // Avoid duplicates by message_id and content
+      // Avoid duplicates by message_id
       setState(prev => {
-        const exists = prev.messages.some(m => 
-          m.message_id === fileInfo.message_id || 
-          (m.message_type === 'file_xchacha20' && 
-           m.sender_id === fileInfo.sender_id && 
-           (m.encrypted_payload as any)?.filename === fileInfo.filename &&
-           Math.abs(new Date(m.timestamp).getTime() - new Date(fileInfo.timestamp).getTime()) < 5000) // Within 5 seconds
-        );
+        const exists = prev.messages.some(m => m.message_id === fileInfo.message_id);
         if (exists) {
           console.log('Duplicate file message detected, skipping:', fileInfo.message_id);
           return prev;
@@ -379,7 +373,7 @@ const App: React.FC = () => {
           }]
         };
       });
-      
+
       addNotification('info', `Encrypted file received: ${fileInfo.filename}`);
     });
 
@@ -441,9 +435,9 @@ const App: React.FC = () => {
       message,
       timestamp: new Date()
     };
-    
+
     setNotifications(prev => [...prev, notification].slice(-10)); // Keep last 10
-    
+
     // Auto-remove after 5 seconds
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== notification.id));
@@ -455,22 +449,22 @@ const App: React.FC = () => {
       console.log('Fetching session key for session:', sessionId);
       const keyResponse = await apiService.getSessionKey(sessionId);
       console.log('Key response:', keyResponse);
-      
+
       if (keyResponse.key && keyResponse.key_length === 32) {
         console.log('Raw key string:', keyResponse.key);
         console.log('Key string length:', keyResponse.key.length);
-        
+
         // Ensure the hex string is valid and has even length
         const cleanHex = keyResponse.key.replace(/[^0-9a-fA-F]/g, '');
         if (cleanHex.length !== 64) { // 32 bytes = 64 hex characters
           throw new Error(`Invalid hex string length: ${cleanHex.length} (expected 64)`);
         }
-        
+
         let sessionKey = new Uint8Array(cleanHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
         console.log('Session key length:', sessionKey.length, 'bytes');
         console.log('Session key (first 8 bytes):', Array.from(sessionKey.slice(0, 8)));
         console.log('Session key (all bytes):', Array.from(sessionKey));
-        
+
         if (sessionKey.length !== 32) {
           console.warn(`Key length is ${sessionKey.length} bytes, adjusting to 32 bytes`);
           // Pad or truncate to exactly 32 bytes
@@ -485,11 +479,11 @@ const App: React.FC = () => {
           sessionKey = adjustedKey;
           console.log('Adjusted session key length:', sessionKey.length, 'bytes');
         }
-        
+
         cryptoService.setSessionKey(sessionKey);
         setState(prev => ({ ...prev, sessionKey }));
         addNotification('success', `Session key retrieved successfully${hybridMode ? ' (Hybrid mode)' : ''}`);
-        
+
         // Force a re-render to update the UI
         setTimeout(() => {
           setState(prev => ({ ...prev, sessionKey }));
@@ -506,15 +500,15 @@ const App: React.FC = () => {
 
   const handleSessionJoin = async (user: User, session: Session) => {
     try {
-      setState(prev => ({ 
-        ...prev, 
-        currentUser: user, 
+      setState(prev => ({
+        ...prev,
+        currentUser: user,
         currentSession: session,
         messages: [],
         eveDetected: false,
         qberHistory: []
       }));
-      
+
       if (user.user_id && session.session_id) {
         socketService.joinSession(session.session_id, user.user_id);
       }
@@ -548,7 +542,7 @@ const App: React.FC = () => {
       qberHistory: [],
       fileTransfers: []
     }));
-    
+
     cryptoService.clear();
     addNotification('info', 'Session ended - all data cleared');
   };
@@ -558,20 +552,20 @@ const App: React.FC = () => {
 
     try {
       await apiService.startBB84Simulation(
-        state.currentSession.session_id, 
-        1000, 
-        0.1, 
+        state.currentSession.session_id,
+        1000,
+        0.1,
         useHybrid
       );
-      
-      setState(prev => ({ 
-        ...prev, 
-        sessionKey: null, 
-        bb84Progress: null, 
+
+      setState(prev => ({
+        ...prev,
+        sessionKey: null,
+        bb84Progress: null,
         eveDetected: false,
         qberHistory: []
       }));
-      
+
       addNotification('info', `BB84 key generation started${useHybrid ? ' with hybrid mode' : ''}`);
     } catch (error) {
       const errorMsg = apiService.handleApiError(error);
@@ -580,12 +574,13 @@ const App: React.FC = () => {
   };
 
   const handleRetrySessionKey = async () => {
-    if (!state.currentSession) return;
-    
+    const currentSession = currentSessionRef.current;
+    if (!currentSession) return;
+
     addNotification('info', 'Retrying session key retrieval...');
     try {
-      await fetchSessionKey(state.currentSession.session_id, false);
-      
+      await fetchSessionKey(currentSession.session_id, false);
+
       // Verify the key was retrieved
       const verifyKey = cryptoService.getSessionKey();
       if (verifyKey && verifyKey.length === 32) {
@@ -648,16 +643,16 @@ const App: React.FC = () => {
         state.currentUser.user_id,
         file
       );
-      
+
       // Don't create local message - let the socket event handle it
       // This prevents duplicate messages with the same ID
-      
+
       // Refresh crypto stats after uploading a file
       try {
         const info = await apiService.getSessionSecurity(state.currentSession.session_id);
         cryptoService.updateCryptoInfo(info);
         setState(prev => ({ ...prev, cryptoInfo: info }));
-      } catch {}
+      } catch { }
 
       addNotification('success', `File encrypted and sent: ${result.filename}`);
     } catch (error) {
@@ -686,7 +681,7 @@ const App: React.FC = () => {
           state.currentUser.user_id
         );
       }
-      
+
       // Create download link
       const blob = new Blob([Uint8Array.from(atob(result.file_data), c => c.charCodeAt(0))]);
       const url = URL.createObjectURL(blob);
@@ -697,7 +692,7 @@ const App: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       const fileType = encrypted ? 'encrypted file' : 'decrypted file';
       addNotification('success', `${fileType} downloaded: ${result.filename}`);
     } catch (error) {
@@ -720,8 +715,8 @@ const App: React.FC = () => {
     if (cached) {
       setState(prev => ({
         ...prev,
-        messages: prev.messages.map(msg => 
-          msg.message_id === messageId 
+        messages: prev.messages.map(msg =>
+          msg.message_id === messageId
             ? { ...msg, decrypted_content: cached }
             : msg
         )
@@ -749,21 +744,11 @@ const App: React.FC = () => {
       <header className="mb-6 space-y-4">
         <div className="glass-card glow-border flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            {hasActiveSession && (
-              <button
-                type="button"
-                className="copy-button lg:hidden"
-                aria-label="Toggle session panel"
-                onClick={() => setMobileMenuOpen(prev => !prev)}
-              >
-                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              </button>
-            )}
             <Shield className="hidden sm:block w-10 h-10 text-[var(--info)]" />
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-[var(--text-muted)]">BB84 QKD Simulator</p>
               <h1 className="font-semibold text-[var(--text-primary)]" style={{ fontSize: 'var(--font-hero)', lineHeight: 1.2 }}>
-                Quantum Lab Control
+                Cryptex
               </h1>
               <p className="text-sm text-[var(--text-secondary)] hidden md:block">Monitor quantum key exchanges with complete clarity</p>
             </div>
@@ -802,20 +787,6 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-        {mobileMenuOpen && hasActiveSession && (
-          <div className="glass-card glow-border lg:hidden">
-            <SessionControlPanel
-              session={state.currentSession}
-              user={state.currentUser}
-              isConnected={state.isConnected}
-              serverOnline={state.serverOnline}
-              eveDetected={state.eveDetected}
-              sessionKeyReady={!!state.sessionKey}
-              highContrast={highContrast}
-              onToggleHighContrast={() => setHighContrast(prev => !prev)}
-            />
-          </div>
-        )}
       </header>
     );
   };
@@ -882,6 +853,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
+
       </div>
     );
   };
@@ -921,32 +893,37 @@ const App: React.FC = () => {
           progress={state.bb84Progress}
           eveDetected={state.eveDetected}
           cryptoInfo={state.cryptoInfo}
+          userRole={currentUser.role}
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr,0.9fr,0.9fr]">
-        <div className="xl:col-span-1">
-          <ChatInterface
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            onDecryptMessage={handleDecryptMessage}
-            onFileUpload={handleFileUpload}
-            onFileDownload={handleFileDownload}
-            currentUser={currentUser}
-            sessionKey={state.sessionKey}
-            sessionId={currentSession.session_id}
-            disabled={!state.sessionKey || state.eveDetected}
-            autoScroll={false}
-          />
+      <div className={`grid gap-6 ${currentUser.role === 'eve' ? 'grid-cols-1' : 'xl:grid-cols-[1.4fr,0.9fr,0.9fr]'}`}>
+        <div className="xl:col-span-1 min-w-0">
+          {currentUser.role !== 'eve' && (
+            <ChatInterface
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              onDecryptMessage={handleDecryptMessage}
+              onFileUpload={handleFileUpload}
+              onFileDownload={handleFileDownload}
+              currentUser={currentUser}
+              sessionKey={state.sessionKey}
+              sessionId={currentSession.session_id}
+              disabled={!state.sessionKey || state.eveDetected}
+              autoScroll={false}
+            />
+          )}
         </div>
 
-        <div>
-          <FileTransferModule
-            transfers={state.fileTransfers}
-            disabled={!state.sessionKey || state.eveDetected}
-            onUpload={handleFileUpload}
-            onDownload={handleFileDownload}
-          />
+        <div className="min-w-0">
+          {currentUser.role !== 'eve' && (
+            <FileTransferModule
+              transfers={state.fileTransfers}
+              disabled={!state.sessionKey || state.eveDetected}
+              onUpload={handleFileUpload}
+              onDownload={handleFileDownload}
+            />
+          )}
         </div>
 
         {currentUser.role === 'eve' && (
@@ -1002,24 +979,28 @@ const App: React.FC = () => {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <ChatInterface
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          onDecryptMessage={handleDecryptMessage}
-          onFileUpload={handleFileUpload}
-          onFileDownload={handleFileDownload}
-          currentUser={currentUser}
-          sessionKey={state.sessionKey}
-            sessionId={currentSession.session_id}
-          disabled={!state.sessionKey || state.eveDetected}
-          autoScroll={false}
-        />
-        <FileTransferModule
-          transfers={state.fileTransfers}
-          disabled={!state.sessionKey || state.eveDetected}
-          onUpload={handleFileUpload}
-          onDownload={handleFileDownload}
-        />
+        {currentUser.role !== 'eve' && (
+          <>
+            <ChatInterface
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              onDecryptMessage={handleDecryptMessage}
+              onFileUpload={handleFileUpload}
+              onFileDownload={handleFileDownload}
+              currentUser={currentUser}
+              sessionKey={state.sessionKey}
+              sessionId={currentSession.session_id}
+              disabled={!state.sessionKey || state.eveDetected}
+              autoScroll={false}
+            />
+            <FileTransferModule
+              transfers={state.fileTransfers}
+              disabled={!state.sessionKey || state.eveDetected}
+              onUpload={handleFileUpload}
+              onDownload={handleFileDownload}
+            />
+          </>
+        )}
       </div>
 
       {currentUser.role === 'eve' && (
@@ -1076,29 +1057,33 @@ const App: React.FC = () => {
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Secure Chat" defaultOpen>
-        <ChatInterface
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          onDecryptMessage={handleDecryptMessage}
-          onFileUpload={handleFileUpload}
-          onFileDownload={handleFileDownload}
-          currentUser={currentUser}
-          sessionKey={state.sessionKey}
-          sessionId={currentSession.session_id}
-          disabled={!state.sessionKey || state.eveDetected}
-          autoScroll={false}
-        />
-      </CollapsibleSection>
+      {currentUser.role !== 'eve' && (
+        <>
+          <CollapsibleSection title="Secure Chat" defaultOpen>
+            <ChatInterface
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              onDecryptMessage={handleDecryptMessage}
+              onFileUpload={handleFileUpload}
+              onFileDownload={handleFileDownload}
+              currentUser={currentUser}
+              sessionKey={state.sessionKey}
+              sessionId={currentSession.session_id}
+              disabled={!state.sessionKey || state.eveDetected}
+              autoScroll={false}
+            />
+          </CollapsibleSection>
 
-      <CollapsibleSection title="File Transfer">
-        <FileTransferModule
-          transfers={state.fileTransfers}
-          disabled={!state.sessionKey || state.eveDetected}
-          onUpload={handleFileUpload}
-          onDownload={handleFileDownload}
-        />
-      </CollapsibleSection>
+          <CollapsibleSection title="File Transfer">
+            <FileTransferModule
+              transfers={state.fileTransfers}
+              disabled={!state.sessionKey || state.eveDetected}
+              onUpload={handleFileUpload}
+              onDownload={handleFileDownload}
+            />
+          </CollapsibleSection>
+        </>
+      )}
 
       {currentUser.role === 'eve' && (
         <CollapsibleSection title="Eve Control Panel">
@@ -1124,9 +1109,9 @@ const App: React.FC = () => {
     if (!currentUser || !currentSession) {
       return (
         <div className="glass-card glow-border">
-          <SessionManager 
-            onSessionJoin={handleSessionJoin} 
-            serverOnline={state.serverOnline} 
+          <SessionManager
+            onSessionJoin={handleSessionJoin}
+            serverOnline={state.serverOnline}
           />
         </div>
       );

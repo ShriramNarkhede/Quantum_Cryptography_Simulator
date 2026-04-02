@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Play, AlertTriangle } from 'lucide-react';
+import { Play, AlertTriangle, ArrowRight, Activity, Shield, Disc } from 'lucide-react';
 import type { BB84Progress, CryptoInfo, QBERDataPoint } from '../types';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 
@@ -44,17 +44,19 @@ const BB84Simulator: React.FC<BB84SimulatorProps> = ({
     }, [progress?.qber]);
 
     const stageSequence = [
-        { id: 'alice_preparation', label: 'Alice Prepares', color: 'from-cyan-400/70 via-blue-500/60 to-indigo-500/60' },
-        { id: 'transmission', label: 'Qubit Transmission', color: 'from-blue-400/60 via-purple-500/60 to-pink-500/60' },
-        { id: 'bob_measurement', label: 'Bob Measures', color: 'from-purple-400/60 via-indigo-400/60 to-blue-500/60' },
-        { id: 'sifting', label: 'Sifting', color: 'from-emerald-400/60 via-teal-500/60 to-cyan-500/60' },
-        { id: 'qber_test', label: 'QBER Test', color: 'from-amber-400/60 via-orange-500/60 to-rose-500/60' },
-        { id: 'complete', label: 'Privacy Amplification', color: 'from-emerald-500/60 via-green-500/60 to-lime-500/50' }
+        { id: 'alice_preparation', label: 'Preparation', color: 'from-cyan-400 to-blue-500' },
+        { id: 'transmission', label: 'Transmission', color: 'from-blue-400 to-indigo-500' },
+        { id: 'bob_measurement', label: 'Measurement', color: 'from-indigo-400 to-purple-500' },
+        { id: 'sifting', label: 'Sifting', color: 'from-purple-400 to-pink-500' },
+        { id: 'qber_test', label: 'QBER Check', color: 'from-pink-400 to-rose-500' },
+        { id: 'complete', label: 'Final Key', color: 'from-emerald-400 to-teal-500' }
     ];
 
     const canStartSimulation = userRole === 'alice' && !progress?.stage;
     const qberPercent = (progress?.qber ?? 0) * 100;
     const thresholdPct = (progress?.threshold ?? 0.11) * 100;
+
+    // Visualization logic remains similar but simplified for new UI
     const visualization = useMemo(() => {
         return Array.from({ length: 12 }, (_, index) => {
             const aliceBasis = Math.random() > 0.5 ? '+' : '×';
@@ -63,313 +65,299 @@ const BB84Simulator: React.FC<BB84SimulatorProps> = ({
             const aliceBit = Math.random() > 0.5 ? 1 : 0;
             const bobResult = matched ? aliceBit : Math.random() > 0.5 ? 1 : 0;
             const eveIntercept = userRole === 'eve' ? Math.random() > 0.6 : Math.random() > 0.9;
-            return {
-                index,
-                aliceBit,
-                aliceBasis,
-                bobBasis,
-                bobResult,
-                matched,
-                eveIntercept
-            };
+            return { index, aliceBit, aliceBasis, bobBasis, bobResult, matched, eveIntercept };
         });
     }, [progress?.stage, userRole]);
 
     const particleNodes = useMemo(() => (
-        Array.from({ length: 10 }, (_, idx) => {
+        Array.from({ length: 8 }, (_, idx) => {
             const top = 20 + Math.random() * 40;
-            const delay = idx * 0.8;
-        return (
+            const delay = idx * 1.2;
+            return (
                 <span
                     key={`particle-${idx}`}
                     style={{
                         top: `${top}%`,
                         animationDelay: `${delay}s`,
-                        left: `${Math.random() * 20}%`
+                        left: `${Math.random() * 10}%`
                     }}
-                    className={`qubit-particle ${Math.random() > 0.8 && eveDetected ? 'eve' : ''}`}
+                    className={`absolute w-1.5 h-1.5 rounded-full filter blur-[1px] opacity-0 animate-pulse 
+                        ${eveDetected ? 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]' : 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]'}
+                        transition-colors duration-500
+                    `}
                 />
             );
         })
     ), [eveDetected]);
 
-    const qberTrendPoints = qberHistory.slice(-15);
+    const qberTrendPoints = qberHistory.slice(-20);
     const comparisonEntries = visualization.slice(0, 8);
 
     const detailedContent = (
         <>
-            <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                 <div>
-                    <p className="metric-label">BB84 Visualization Dashboard</p>
-                    <h2 className="text-3xl font-semibold text-[var(--text-primary)]">Quantum Channel · {userRole.toUpperCase()}</h2>
-                    <p className="text-sm text-[var(--text-secondary)]">
-                        {userRole === 'alice' && 'Control qubit generation & start new sessions'}
-                        {userRole === 'bob' && 'Monitor incoming qubits and validate bases'}
-                        {userRole === 'eve' && 'Simulate adversarial presence on the channel'}
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-2 h-2 rounded-full ${progress?.stage ? 'bg-[var(--system-green)] animate-pulse' : 'bg-[var(--text-muted)]'}`} />
+                        <p className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest">Quantum Distribution Protocol</p>
+                    </div>
+                    <h2 className="text-2xl font-bold text-[var(--text-primary)]">BB84 Simulation</h2>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1 max-w-lg">
+                        Real-time simulation of quantum key distribution states, measuring polarization and detecting interference.
                     </p>
                 </div>
+
                 {canStartSimulation && (
                     <button
                         onClick={() => onStartBB84()}
-                        className="quantum-button bg-gradient-to-r from-cyan-500 to-blue-500 text-white flex items-center gap-2"
+                        className="quantum-button bg-[var(--system-blue)] text-white hover:brightness-110 shadow-lg shadow-blue-500/20 group flex items-center justify-center gap-2"
                     >
-                        <Play className="w-4 h-4" />
-                        Start BB84
+                        <Play className="w-4 h-4 fill-current group-hover:scale-110 transition-transform" />
+                        <span>Initiate Protocol</span>
                     </button>
                 )}
-            </header>
+            </div>
 
+            {/* Alert Banner */}
             {eveDetected && (
-                <div className="mt-6 rounded-2xl border border-rose-400/30 bg-gradient-to-r from-rose-900/50 to-orange-900/30 p-4 flex items-center gap-3">
-                    <AlertTriangle className="text-rose-200" />
+                <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 backdrop-blur-md flex items-center gap-4 animate-in slide-in-from-top-2">
+                    <div className="p-2 bg-red-500/20 rounded-full">
+                        <AlertTriangle className="w-6 h-6 text-red-500" />
+                    </div>
                     <div>
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">Eavesdropping detected via QBER spike</p>
-                        <p className="text-xs text-rose-200">Take immediate action: pause comms or re-run BB84.</p>
+                        <h3 className="text-sm font-bold text-red-700">Eavesdropper Isolation Protocol Active</h3>
+                        <p className="text-xs text-red-600/80">High error rate detected (QBER &gt; {thresholdPct.toFixed(1)}%). Channel is insecure.</p>
                     </div>
                 </div>
             )}
 
-            <div className="mt-8 grid xl:grid-cols-[1.8fr,1fr] gap-6">
+            <div className="grid xl:grid-cols-[1.5fr,1fr] gap-6">
+                {/* Left Column: Visualization */}
                 <div className="space-y-6">
-                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 space-y-4">
-                        <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
-                            <span>Alice • Bits & Bases</span>
-                            <span>Bob • Measurements</span>
+                    {/* Bits Visualization */}
+                    <div className="glass-card !p-0 overflow-hidden relative min-h-[240px] flex flex-col">
+                        <div className="absolute inset-0 bg-gradient-to-br from-[var(--bg-secondary)]/50 to-transparent pointer-events-none" />
+
+                        {/* Stream Effect Background */}
+                        <div className="absolute inset-0 opacity-20">
+                            {/* Simplified stream visual using CSS gradients instead of many DOM nodes */}
+                            <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[var(--system-cyan)] to-transparent" />
+                            {particleNodes}
                         </div>
 
-                        <div className="space-y-3">
-                            {['alice', 'bob'].map((actor) => (
-                                <div key={actor} className="flex items-center gap-3">
-                                    <span className={`session-chip ${actor}`}>{actor === 'alice' ? 'Alice' : 'Bob'}</span>
-                                    <div className="flex-1 flex gap-2 overflow-x-auto">
-                                        {visualization.map((bit) => (
-                                            <div
-                                                key={`${actor}-${bit.index}`}
-                                                className={`bit-grid-cell ${bit.matched ? 'match' : ''} w-11 h-14 rounded-2xl border flex flex-col items-center justify-center text-xs font-mono ${
-                                                    bit.eveIntercept && actor === 'alice' ? 'ring-2 ring-rose-400/60' : ''
-                                                }`}
-                                            >
-                                                <span className="text-base font-semibold">
-                                                    {actor === 'alice' ? bit.aliceBit : bit.bobResult}
-                                                </span>
-                                                <span className="text-[10px] bit-grid-cell__basis">
-                                                    {actor === 'alice' ? bit.aliceBasis : bit.bobBasis}
-                                                </span>
+                        <div className="relative z-10 p-6 flex-1 flex flex-col justify-center gap-8">
+                            {/* Alice Row */}
+                            <div className="flex items-center gap-4">
+                                <span className="w-16 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-right">Alice</span>
+                                <div className="flex-1 flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar mask-gradient-right">
+                                    {visualization.map((bit) => (
+                                        <div key={`alice-${bit.index}`} className="flex flex-col items-center gap-1 min-w-[32px]">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold border 
+                                            ${bit.eveIntercept ? 'border-red-500/50 bg-red-500/10 text-red-500' : 'border-[var(--system-cyan)]/30 bg-[var(--system-cyan)]/10 text-[var(--system-cyan)]'}`}>
+                                                {bit.aliceBit}
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="qubit-stream">
-                        {particleNodes}
-                        <div className="relative z-10 flex items-center justify-between px-6 py-4 text-sm text-[var(--text-primary)]">
-                            <span>Qubits in flight</span>
-                            <span className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-cyan-300 animate-pulse" />
-                                Pulsing = active transmission
-                            </span>
-                    </div>
-                </div>
-
-                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 grid md:grid-cols-2 gap-4">
-                        <div>
-                            <p className="metric-label">Stage</p>
-                            <p className="text-2xl font-semibold text-[var(--text-primary)]">
-                                {progress?.message || progress?.stage?.replace('_', ' ').toUpperCase() || 'Idle'}
-                            </p>
-                            <div className="mt-3 h-2 rounded-full bg-[var(--panel-muted)]">
-                                <div
-                                    className={`h-full rounded-full ${eveDetected ? 'bg-gradient-to-r from-amber-500 to-rose-500' : 'bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500'}`}
-                                    style={{ width: `${Math.round((progress?.progress ?? 0) * 100)}%` }}
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <p className="metric-label mb-2">Live Comparison</p>
-                            <div className="rounded-2xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-3 flex flex-col gap-3">
-                                <div className="grid grid-cols-[56px,1fr,70px] text-xs text-[var(--table-header)]">
-                                    <span>Bit</span>
-                                    <span>Alice vs Bob</span>
-                                    <span className="text-right pr-2">Match</span>
-                                </div>
-                                <div className="space-y-1">
-                                    {comparisonEntries.map((bit) => (
-                                        <div
-                                            key={`row-${bit.index}`}
-                                            className="grid grid-cols-[56px,1fr,70px] text-sm text-[var(--text-primary)] items-center py-0.5 rounded-md bg-[var(--table-row)]"
-                                        >
-                                            <span className="font-mono pl-1">{bit.index.toString().padStart(2, '0')}</span>
-                                            <span className="font-mono">{bit.aliceBit}/{bit.bobResult} ({bit.aliceBasis}/{bit.bobBasis})</span>
-                                            <span className={`text-right pr-2 ${bit.matched ? 'text-emerald-500' : 'text-slate-500'}`}>
-                                                {bit.matched ? '✓' : '×'}
-                                        </span>
-                                    </div>
+                                            <span className="text-[10px] text-[var(--text-muted)] font-mono">{bit.aliceBasis}</span>
+                                        </div>
                                     ))}
-                                    <p className="text-[11px] text-[var(--table-header)] mt-1 pl-1">Showing last {comparisonEntries.length} bits</p>
-                                    </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="space-y-6">
-                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 flex flex-col items-center gap-4">
-                        <div
-                            className="qber-ring"
-                            style={{ // @ts-ignore custom property
-                                '--qber-angle': `${Math.min(100, qberPercent)}%`
-                            }}
-                        >
-                            <strong>{qberPercent.toFixed(2)}%</strong>
-                        </div>
-                        <p className="text-sm text-[var(--text-secondary)] text-center">
-                            Live QBER · Threshold {thresholdPct.toFixed(1)}%
-                        </p>
-                        {qberPercent > thresholdPct && (
-                            <span className="text-xs text-rose-200">Warning: error rate beyond safe envelope</span>
-                        )}
-                    </div>
-
-                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 space-y-4">
-                        <p className="metric-label">Channel Health</p>
-                            <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
-                                <span>Sifted Bits</span>
-                                <span className="font-semibold text-[var(--text-primary)]">
-                                    {progress?.sifted_length ?? 0}/{progress?.original_length ?? 0}
-                                    </span>
                                 </div>
-                            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
-                                <span>Final key</span>
-                                <span className="font-semibold text-emerald-500">{progress?.final_key_length ?? '--'} bytes</span>
                             </div>
-                            <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
-                                <span>Session key</span>
-                                <span className="font-semibold text-[var(--text-primary)]">
-                                    {sessionKey ? `${sessionKey.length * 8} bits ready` : 'Awaiting'}
-                                </span>
+
+                            {/* Connector Lines (Visual only) */}
+                            <div className="h-px w-full bg-gradient-to-r from-transparent via-[var(--card-border)] to-transparent opacity-50" />
+
+                            {/* Bob Row */}
+                            <div className="flex items-center gap-4">
+                                <span className="w-16 text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-right">Bob</span>
+                                <div className="flex-1 flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar mask-gradient-right">
+                                    {visualization.map((bit) => (
+                                        <div key={`bob-${bit.index}`} className="flex flex-col items-center gap-1 min-w-[32px]">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold border transition-colors duration-500
+                                            ${bit.matched
+                                                    ? 'border-[var(--system-green)]/30 bg-[var(--system-green)]/10 text-[var(--system-green)]'
+                                                    : 'border-[var(--text-muted)]/30 bg-[var(--text-muted)]/5 text-[var(--text-muted)]'}`}>
+                                                {bit.bobResult}
+                                            </div>
+                                            <span className="text-[10px] text-[var(--text-muted)] font-mono">{bit.bobBasis}</span>
                                         </div>
-                                    </div>
-                        {!sessionKey && progress?.success && onRetrySessionKey && (
-                                        <button
-                                className="quantum-button bg-[var(--panel-muted)] border border-[var(--surface-border)] text-[var(--text-primary)] w-full"
-                                            onClick={onRetrySessionKey}
-                                        >
-                                Retry key retrieval
-                                        </button>
-                        )}
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-3 bg-[var(--card-surface)]/50 backdrop-blur-sm border-t border-[var(--card-border)] flex justify-between items-center text-xs">
+                            <span className="text-[var(--text-secondary)]">Quantum State Transmission</span>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-[var(--system-cyan)]" />
+                                    <span className="text-[var(--text-muted)]">Basis Match</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-[var(--text-muted)] opacity-50" />
+                                    <span className="text-[var(--text-muted)]">Discarded</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 space-y-4">
-                        <p className="metric-label">Stage Timeline</p>
-                        <div className="space-y-3">
-                            {stageSequence.map((stage, idx) => {
-                                const active = progress?.stage === stage.id;
-                                const completed = stageSequence.findIndex(s => s.id === progress?.stage) > idx;
-                                return (
-                                    <div key={stage.id} className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${stage.color} flex items-center justify-center text-sm text-white`}>
-                                            {idx + 1}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm text-[var(--text-primary)] font-medium">{stage.label}</p>
-                                            <div className="h-1 rounded-full bg-[var(--panel-muted)] mt-2">
-                                                <div
-                                                    className={`h-full rounded-full ${completed || active ? 'bg-gradient-to-r from-emerald-400 to-cyan-500' : 'bg-[var(--panel-muted)]'} ${active ? 'animate-pulse' : ''}`}
-                                                    style={{ width: `${completed ? 100 : active ? Math.max(8, (progress?.progress ?? 0) * 100) : 8}%` }}
-                                                />
+                    {/* Timeline */}
+                    <div className="glass-card p-6">
+                        <h3 className="text-sm font-bold text-[var(--text-primary)] mb-6">Protocol Sequence</h3>
+                        <div className="relative">
+                            <div className="absolute left-6 top-0 bottom-0 w-px bg-[var(--card-border)]" />
+                            <div className="space-y-6 relative">
+                                {stageSequence.map((stage, idx) => {
+                                    const active = progress?.stage === stage.id;
+                                    const completed = stageSequence.findIndex(s => s.id === progress?.stage) > idx; // Simplified
+                                    // Or simplified logic: if we are past this stage index
+                                    // Better logic for completed: current stage index > this index
+                                    const currentStageIdx = stageSequence.findIndex(s => s.id === progress?.stage);
+                                    const isCompleted = currentStageIdx > idx || (progress?.success && idx === stageSequence.length - 1);
+
+                                    return (
+                                        <div key={stage.id} className={`flex items-start gap-4 transition-opacity ${active || isCompleted ? 'opacity-100' : 'opacity-40'}`}>
+                                            <div className={`relative z-10 w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold shadow-sm transition-all duration-300
+                                                ${active
+                                                    ? 'bg-[var(--system-blue)] text-white scale-110 shadow-blue-500/30'
+                                                    : isCompleted
+                                                        ? 'bg-[var(--system-green)] text-white'
+                                                        : 'bg-[var(--bg-secondary)] text-[var(--text-muted)] border border-[var(--card-border)]'
+                                                }`}>
+                                                {isCompleted ? <ArrowRight className="w-5 h-5 rotate-90 md:rotate-0" /> : idx + 1}
+                                            </div>
+                                            <div className="pt-2 flex-1">
+                                                <h4 className={`text-sm font-bold ${active ? 'text-[var(--system-blue)]' : 'text-[var(--text-primary)]'}`}>
+                                                    {stage.label}
+                                                </h4>
+                                                {active && (
+                                                    <div className="mt-2 h-1.5 w-full max-w-[200px] bg-[var(--bg-secondary)] rounded-full overflow-hidden">
+                                                        <div className="h-full bg-[var(--system-blue)] animate-progress-indeterminate" />
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
-                </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
+                </div>
 
-                    <div className="rounded-3xl border border-[var(--surface-border)] bg-[var(--panel-surface)] p-5 space-y-3">
-                        <p className="metric-label">QBER Trend</p>
-                        <div className="h-24">
-                            <svg width="100%" height="100%" viewBox="0 0 200 100">
-                                <polyline
-                                    fill="none"
-                                    stroke={eveDetected ? '#f87171' : '#38bdf8'}
-                                    strokeWidth="2"
-                                    points={qberTrendPoints.map((point, index) => {
-                                        const x = (index / (qberTrendPoints.length - 1 || 1)) * 200;
-                                        const y = 100 - Math.min(100, point.qber);
-                                        return `${x},${y}`;
-                                    }).join(' ')}
-                                />
-                                <line
-                                    x1="0"
-                                    y1={100 - thresholdPct}
-                                    x2="200"
-                                    y2={100 - thresholdPct}
-                                    stroke="#fbbf24"
-                                    strokeDasharray="4 4"
-                                    strokeWidth="1"
+                {/* Right Column: Metrics */}
+                <div className="space-y-6">
+                    {/* QBER Radial */}
+                    <div className="glass-card p-6 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                            <Activity className="w-32 h-32" />
+                        </div>
+                        <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 uppercase tracking-wider">Live Error Rate</h3>
+                        <div className="relative w-40 h-40 flex items-center justify-center">
+                            {/* SVG Ring */}
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="45" fill="none" stroke="var(--bg-secondary)" strokeWidth="8" />
+                                <circle
+                                    cx="50" cy="50" r="45" fill="none"
+                                    stroke={qberPercent > thresholdPct ? 'var(--system-red)' : 'var(--system-blue)'}
+                                    strokeWidth="8"
+                                    strokeDasharray="283"
+                                    strokeDashoffset={283 - (283 * Math.min(qberPercent, 100) / 100)}
+                                    className="transition-all duration-1000 ease-out"
+                                    strokeLinecap="round"
                                 />
                             </svg>
+                            <div className="absolute flex flex-col items-center">
+                                <span className={`text-3xl font-bold tracking-tighter ${qberPercent > thresholdPct ? 'text-[var(--system-red)]' : 'text-[var(--text-primary)]'}`}>
+                                    {qberPercent.toFixed(1)}%
+                                </span>
+                                <span className="text-[10px] text-[var(--text-muted)] font-medium">QBER</span>
+                            </div>
                         </div>
-                        <div className="flex justify-between text-xs text-[var(--table-header)]">
-                            <span>Recent</span>
-                            <span>{qberTrendPoints.length} samples</span>
+                        <div className="mt-4 px-4 py-2 rounded-xl bg-[var(--bg-secondary)] text-xs text-[var(--text-muted)]">
+                            Threshold: <span className="text-[var(--text-primary)] font-bold">{thresholdPct.toFixed(1)}%</span>
                         </div>
+                    </div>
+
+                    {/* Key Stats */}
+                    <div className="glass-card p-6 space-y-6">
+                        <div className="flex items-center gap-3 mb-2">
+                            <Shield className="w-5 h-5 text-[var(--system-indigo)]" />
+                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Key Generation</h3>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--card-border)] flex justify-between items-center">
+                                <span className="text-xs text-[var(--text-secondary)]">Raw Bits</span>
+                                <span className="text-sm font-mono font-bold text-[var(--text-primary)]">{progress?.original_length ?? 0}</span>
+                            </div>
+                            <div className="p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--card-border)] flex justify-between items-center">
+                                <span className="text-xs text-[var(--text-secondary)]">Sifted Bits</span>
+                                <span className="text-sm font-mono font-bold text-[var(--system-blue)]">{progress?.sifted_length ?? 0}</span>
+                            </div>
+                            <div className="p-3 rounded-xl bg-[var(--system-green)]/10 border border-[var(--system-green)]/20 flex justify-between items-center">
+                                <span className="text-xs text-[var(--system-green)] font-semibold">Final Key</span>
+                                <span className="text-sm font-mono font-bold text-[var(--system-green)]">
+                                    {progress?.final_key_length && userRole !== 'eve' ? `${progress.final_key_length} bytes` : '---'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {!sessionKey && progress?.success && onRetrySessionKey && (
+                            <button
+                                onClick={onRetrySessionKey}
+                                className="w-full py-3 rounded-xl bg-[var(--text-primary)] text-[var(--bg-primary)] font-bold text-sm hover:opacity-90 transition-opacity"
+                            >
+                                Retry Key Exchange
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
         </>
     );
 
+    // Mobile / Compact View
     if (isCompact) {
-        const totalBits = progress?.original_length ?? 0;
-        const matchedBits = progress?.sifted_length ?? 0;
-        const qberDisplay = progress?.qber ? `${(progress.qber * 100).toFixed(2)}%` : '—';
-
         return (
-            <section className="glass-card glow-border space-y-4">
+            <div className="glass-card space-y-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <p className="metric-label">Quantum Flow</p>
-                        <h2 className="text-xl font-semibold text-[var(--text-primary)]">BB84 Overview</h2>
+                        <h2 className="text-lg font-bold text-[var(--text-primary)]">BB84 Status</h2>
+                        <p className="text-xs text-[var(--text-secondary)]">Stage: {progress?.stage?.replace('_', ' ') ?? 'Idle'}</p>
                     </div>
-                    <button
-                        onClick={() => setMobileDetailsOpen(prev => !prev)}
-                        className="copy-button"
-                    >
-                        {mobileDetailsOpen ? 'Hide Details' : 'View Details'}
+                    <button onClick={() => setMobileDetailsOpen(!mobileDetailsOpen)} className="p-2 rounded-full bg-[var(--bg-secondary)]">
+                        {mobileDetailsOpen ? <ArrowRight className="-rotate-90 w-4 h-4" /> : <ArrowRight className="rotate-90 w-4 h-4" />}
                     </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm text-[var(--text-secondary)]">
-                    <div>
-                        <p className="metric-label">Total Bits</p>
-                        <p className="metric-value text-[var(--text-primary)]">{totalBits}</p>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2 rounded-lg bg-[var(--bg-secondary)]">
+                        <div className="text-[10px] text-[var(--text-muted)]">QBER</div>
+                        <div className={`text-sm font-bold ${qberPercent > thresholdPct ? 'text-red-500' : 'text-blue-500'}`}>{qberPercent.toFixed(1)}%</div>
                     </div>
-                    <div>
-                        <p className="metric-label">Matched Bases</p>
-                        <p className="metric-value text-[var(--text-primary)]">{matchedBits}</p>
+                    <div className="p-2 rounded-lg bg-[var(--bg-secondary)]">
+                        <div className="text-[10px] text-[var(--text-muted)]">Sifted</div>
+                        <div className="text-sm font-bold text-[var(--text-primary)]">{progress?.sifted_length ?? 0}</div>
                     </div>
-                    <div>
-                        <p className="metric-label">QBER</p>
-                        <p className="metric-value text-[var(--text-primary)]">{qberDisplay}</p>
-                    </div>
-                    <div>
-                        <p className="metric-label">Stage</p>
-                        <p className="metric-value text-[var(--text-primary)]">{progress?.stage?.replace('_', ' ') ?? 'Idle'}</p>
+                    <div className="p-2 rounded-lg bg-[var(--bg-secondary)]">
+                        <div className="text-[10px] text-[var(--text-muted)]">Key</div>
+                        <div className="text-sm font-bold text-[var(--system-green)]">{progress?.final_key_length ?? '-'}</div>
                     </div>
                 </div>
 
-                {mobileDetailsOpen && detailedContent}
-            </section>
+                {mobileDetailsOpen && (
+                    <div className="mt-4 pt-4 border-t border-[var(--card-border)]">
+                        {detailedContent}
+                    </div>
+                )}
+            </div>
         );
     }
 
     return (
-        <section className="glass-card glow-border">
+        <section className="dashboard-section relative">
+            {/* Background glow for this section */}
+            <div className="absolute -inset-4 bg-gradient-to-r from-blue-500/5 to-cyan-500/5 blur-3xl rounded-[3rem] -z-10" />
+
             {detailedContent}
         </section>
     );

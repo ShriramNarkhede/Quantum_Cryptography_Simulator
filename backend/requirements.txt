@@ -63,3 +63,9 @@ bcrypt==4.0.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 SQLAlchemy==2.0.36
+
+# Post-Quantum Cryptography (liboqs optional; pqcrypto used by default)
+pqcrypto>=0.3.4              # Pure Python PQC implementations (backup) - latest available version
+
+# Redis
+redis[hiredis]>=5.0.0

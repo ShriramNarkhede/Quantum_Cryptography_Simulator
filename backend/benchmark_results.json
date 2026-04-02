@@ -1,0 +1,419 @@
+{
+  "timestamp": "2026-02-26 11:43:55",
+  "system_info": {
+    "python_version": "3.11.14",
+    "platform": "linux",
+    "cpu_count": 12,
+    "cpu_freq_mhz": 3225.9869999999996,
+    "ram_total_gb": 6.61,
+    "ram_available_gb": 0.91,
+    "qiskit_version": "2.3.0",
+    "pqc_available": true,
+    "psutil_available": true,
+    "matplotlib_available": false
+  },
+  "bb84_scalability": [
+    {
+      "n_bits": 128,
+      "total_ms": 989.98,
+      "stage_times": [
+        {
+          "name": "alice_preparation",
+          "duration_ms": 0.011872999493789393
+        },
+        {
+          "name": "qubit_preparation",
+          "duration_ms": 100.5845199997566
+        },
+        {
+          "name": "transmission",
+          "duration_ms": 218.82590700079163
+        },
+        {
+          "name": "bob_measurement",
+          "duration_ms": 0.06104099975345889
+        },
+        {
+          "name": "sifting",
+          "duration_ms": 272.28512300007424
+        },
+        {
+          "name": "sifted",
+          "duration_ms": 0.06641900017712032
+        },
+        {
+          "name": "qber_test",
+          "duration_ms": 100.6885129991133
+        },
+        {
+          "name": "qber_computed",
+          "duration_ms": 0.06977100019867066
+        },
+        {
+          "name": "key_distillation",
+          "duration_ms": 100.75549100019998
+        },
+        {
+          "name": "privacy_amplification",
+          "duration_ms": 100.83846300040022
+        },
+        {
+          "name": "complete",
+          "duration_ms": 100.88071599966497
+        }
+      ],
+      "qber": 0.0,
+      "final_key_length": 32,
+      "success": true
+    },
+    {
+      "n_bits": 256,
+      "total_ms": 1050.17,
+      "stage_times": [
+        {
+          "name": "alice_preparation",
+          "duration_ms": 0.017950000255950727
+        },
+        {
+          "name": "qubit_preparation",
+          "duration_ms": 100.85683000033896
+        },
+        {
+          "name": "transmission",
+          "duration_ms": 240.37719899934018
+        },
+        {
+          "name": "bob_measurement",
+          "duration_ms": 0.011873000403284095
+        },
+        {
+          "name": "sifting",
+          "duration_ms": 310.5600620001496
+        },
+        {
+          "name": "sifted",
+          "duration_ms": 0.049587999455980025
+        },
+        {
+          "name": "qber_test",
+          "duration_ms": 101.03136399993673
+        },
+        {
+          "name": "qber_computed",
+          "duration_ms": 0.08618399988336023
+        },
+        {
+          "name": "key_distillation",
+          "duration_ms": 100.66036700027325
+        },
+        {
+          "name": "privacy_amplification",
+          "duration_ms": 100.76834200026497
+        },
+        {
+          "name": "complete",
+          "duration_ms": 100.7742080000753
+        }
+      ],
+      "qber": 0.0,
+      "final_key_length": 32,
+      "success": true
+    },
+    {
+      "n_bits": 512,
+      "total_ms": 1191.39,
+      "stage_times": [
+        {
+          "name": "alice_preparation",
+          "duration_ms": 0.02234899966424564
+        },
+        {
+          "name": "qubit_preparation",
+          "duration_ms": 101.56306699991546
+        },
+        {
+          "name": "transmission",
+          "duration_ms": 262.88496699999087
+        },
+        {
+          "name": "bob_measurement",
+          "duration_ms": 0.01096500000130618
+        },
+        {
+          "name": "sifting",
+          "duration_ms": 419.26377700019657
+        },
+        {
+          "name": "sifted",
+          "duration_ms": 0.15113599965843605
+        },
+        {
+          "name": "qber_test",
+          "duration_ms": 100.73244399973191
+        },
+        {
+          "name": "qber_computed",
+          "duration_ms": 0.12306000007811235
+        },
+        {
+          "name": "key_distillation",
+          "duration_ms": 100.72769399994286
+        },
+        {
+          "name": "privacy_amplification",
+          "duration_ms": 100.78370700011874
+        },
+        {
+          "name": "complete",
+          "duration_ms": 100.808431000587
+        }
+      ],
+      "qber": 0.0,
+      "final_key_length": 32,
+      "success": true
+    },
+    {
+      "n_bits": 1024,
+      "total_ms": 1421.53,
+      "stage_times": [
+        {
+          "name": "alice_preparation",
+          "duration_ms": 0.04120599987800233
+        },
+        {
+          "name": "qubit_preparation",
+          "duration_ms": 101.76106699964294
+        },
+        {
+          "name": "transmission",
+          "duration_ms": 327.1031700005551
+        },
+        {
+          "name": "bob_measurement",
+          "duration_ms": 0.01815899940993404
+        },
+        {
+          "name": "sifting",
+          "duration_ms": 567.1981410005174
+        },
+        {
+          "name": "sifted",
+          "duration_ms": 0.15218399948935257
+        },
+        {
+          "name": "qber_test",
+          "duration_ms": 100.92087500015623
+        },
+        {
+          "name": "qber_computed",
+          "duration_ms": 0.21790499977214495
+        },
+        {
+          "name": "key_distillation",
+          "duration_ms": 100.73572600049374
+        },
+        {
+          "name": "privacy_amplification",
+          "duration_ms": 100.79278600005637
+        },
+        {
+          "name": "complete",
+          "duration_ms": 100.91444999943633
+        }
+      ],
+      "qber": 0.0,
+      "final_key_length": 32,
+      "success": true
+    }
+  ],
+  "hybrid_overhead": {
+    "bb84_ms": 1036.63,
+    "pqc_keygen_ms": 0.32,
+    "pqc_encaps_ms": 0.12,
+    "hybrid_derive_ms": 0.42,
+    "total_ms": 1038.16,
+    "overhead_ms": 1.53,
+    "overhead_pct": 0.15
+  },
+  "encryption_throughput": [
+    {
+      "algorithm": "OTP+HMAC-SHA3-256",
+      "operation": "encrypt",
+      "data_size_bytes": 256,
+      "time_ms": 0.2545,
+      "throughput_mbps": 0
+    },
+    {
+      "algorithm": "OTP+HMAC-SHA3-256",
+      "operation": "decrypt",
+      "data_size_bytes": 256,
+      "time_ms": 0.2122,
+      "throughput_mbps": 0
+    },
+    {
+      "algorithm": "XChaCha20-Poly1305",
+      "operation": "encrypt",
+      "data_size_bytes": 1048576,
+      "time_ms": 2.12,
+      "throughput_mbps": 471.4
+    },
+    {
+      "algorithm": "XChaCha20-Poly1305",
+      "operation": "decrypt",
+      "data_size_bytes": 1048576,
+      "time_ms": 1.88,
+      "throughput_mbps": 531.21
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "operation": "encrypt",
+      "data_size_bytes": 1048576,
+      "time_ms": 1.04,
+      "throughput_mbps": 960.78
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "operation": "decrypt",
+      "data_size_bytes": 1048576,
+      "time_ms": 1.43,
+      "throughput_mbps": 699.98
+    },
+    {
+      "algorithm": "XChaCha20-Poly1305",
+      "operation": "encrypt",
+      "data_size_bytes": 10485760,
+      "time_ms": 16.41,
+      "throughput_mbps": 609.21
+    },
+    {
+      "algorithm": "XChaCha20-Poly1305",
+      "operation": "decrypt",
+      "data_size_bytes": 10485760,
+      "time_ms": 14.96,
+      "throughput_mbps": 668.43
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "operation": "encrypt",
+      "data_size_bytes": 10485760,
+      "time_ms": 9.39,
+      "throughput_mbps": 1065.12
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "operation": "decrypt",
+      "data_size_bytes": 10485760,
+      "time_ms": 12.37,
+      "throughput_mbps": 808.6
+    },
+    {
+      "algorithm": "XChaCha20-Poly1305",
+      "operation": "encrypt",
+      "data_size_bytes": 52428800,
+      "time_ms": 102.74,
+      "throughput_mbps": 486.64
+    },
+    {
+      "algorithm": "XChaCha20-Poly1305",
+      "operation": "decrypt",
+      "data_size_bytes": 52428800,
+      "time_ms": 109.05,
+      "throughput_mbps": 458.52
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "operation": "encrypt",
+      "data_size_bytes": 52428800,
+      "time_ms": 115.12,
+      "throughput_mbps": 434.33
+    },
+    {
+      "algorithm": "AES-256-GCM",
+      "operation": "decrypt",
+      "data_size_bytes": 52428800,
+      "time_ms": 112.27,
+      "throughput_mbps": 445.36
+    }
+  ],
+  "quantum_tax": [
+    {
+      "file_size": "1 MB",
+      "file_size_bytes": 1048576,
+      "xchacha_enc_ms": 2.12,
+      "aes_enc_ms": 1.04,
+      "tax_enc_pct": 103.81,
+      "xchacha_dec_ms": 1.88,
+      "aes_dec_ms": 1.43,
+      "tax_dec_pct": 31.77
+    },
+    {
+      "file_size": "10 MB",
+      "file_size_bytes": 10485760,
+      "xchacha_enc_ms": 16.41,
+      "aes_enc_ms": 9.39,
+      "tax_enc_pct": 74.84,
+      "xchacha_dec_ms": 14.96,
+      "aes_dec_ms": 12.37,
+      "tax_dec_pct": 20.97
+    },
+    {
+      "file_size": "50 MB",
+      "file_size_bytes": 52428800,
+      "xchacha_enc_ms": 102.74,
+      "aes_enc_ms": 115.12,
+      "tax_enc_pct": -10.75,
+      "xchacha_dec_ms": 109.05,
+      "aes_dec_ms": 112.27,
+      "tax_dec_pct": -2.87
+    }
+  ],
+  "attack_impact": [
+    {
+      "attack_type": "intercept_resend",
+      "params": {
+        "fraction": 1.0,
+        "strategy": "random"
+      },
+      "time_ms": 1117.74,
+      "qber": 0.19676,
+      "overhead_vs_clean_pct": 5.92
+    },
+    {
+      "attack_type": "partial_intercept_50%",
+      "params": {
+        "fraction": 0.5,
+        "strategy": "random"
+      },
+      "time_ms": 1048.57,
+      "qber": 0.13647,
+      "overhead_vs_clean_pct": -0.63
+    },
+    {
+      "attack_type": "depolarizing_25%",
+      "params": {
+        "noise_probability": 0.25
+      },
+      "time_ms": 1070.58,
+      "qber": 0.16147,
+      "overhead_vs_clean_pct": 1.45
+    },
+    {
+      "attack_type": "qubit_loss_30%",
+      "params": {
+        "loss_probability": 0.3
+      },
+      "time_ms": 1140.79,
+      "qber": 0.0,
+      "overhead_vs_clean_pct": 8.11
+    }
+  ],
+  "network_rtt": null,
+  "concurrency": {
+    "n_sessions": 10,
+    "wall_clock_ms": 1391.0,
+    "avg_per_session_ms": 1243.35,
+    "success_count": 10,
+    "cpu_pct": 0.0,
+    "ram_delta_mb": 0.0
+  }
+}
